@@ -1,0 +1,48 @@
+{
+  "metadata": {
+    "executedAt": "2026-11-06T13:33:40.239Z",
+    "provider": "google-gemini",
+    "modelId": "gemini-3.5-flash-lite",
+    "isDryRun": false,
+    "isGroundingEnabled": false,
+    "totalPromptsEvaluated": 1,
+    "totalExecutionDurationMs": 6105
+  },
+  "metrics": {
+    "totalRunsEvaluated": 1,
+    "successfulRunsCount": 1,
+    "failedRunsCount": 0,
+    "brandMentionRate": 0,
+    "competitorMentionRate": 100,
+    "sampleShareOfVoice": 0,
+    "totalBrandMentions": 0,
+    "totalCompetitorMentions": 7,
+    "averageCitationsPerResponse": 0,
+    "averageMentionPosition": null,
+    "methodologyNotice": "Based on 0 brand mentions out of 7 total brand and competitor mentions across the evaluated sample.",
+    "samplingDisclaimer": "Truth-in-Reporting: These metrics represent sampled AI responses across a defined benchmark dataset. They do not represent total consumer AI search volume, global search impressions, or guaranteed rankings."
+  },
+  "topCitations": [],
+  "costAnalysis": {
+    "totalInputTokens": 21,
+    "totalOutputTokens": 1088,
+    "totalTokens": 1109,
+    "estimatedCostUsd": 0.0027,
+    "estimatedCostInr": 0.23
+  },
+  "results": [
+    {
+      "promptId": "PROMPT-001",
+      "category": "Brand discovery",
+      "status": "COMPLETED",
+      "latencyMs": 6101,
+      "tokenUsage": {
+        "inputTokens": 21,
+        "outputTokens": 1088,
+        "totalTokens": 1109
+      },
+      "mentions": [],
+      "citations": []
+    }
+  ]
+}

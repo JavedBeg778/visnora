@@ -1,0 +1,462 @@
+[
+  {
+    "id": "PROMPT-001",
+    "category": "Brand discovery",
+    "promptText": "What are the emerging AI visibility and generative engine optimization (GEO) platforms for marketing teams in India?",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "MarTech SaaS",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Otterly", "Peec", "Semrush"]
+  },
+  {
+    "id": "PROMPT-002",
+    "category": "Brand discovery",
+    "promptText": "Which new Indian SaaS startups are helping brands track how they appear in ChatGPT and Gemini answers?",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "AI Marketing",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Profet", "Athena"]
+  },
+  {
+    "id": "PROMPT-003",
+    "category": "Brand discovery",
+    "promptText": "Who are the top digital marketing analytics providers for multi-client agencies in Bengaluru and Mumbai?",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "Digital Agencies",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Zoho", "WhatConverts", "AgencyAnalytics", "Visnora"]
+  },
+  {
+    "id": "PROMPT-004",
+    "category": "Brand discovery",
+    "promptText": "What software solutions exist for tracking generative AI search mentions for e-commerce brands in India?",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "E-commerce",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Brand24", "Mention"]
+  },
+  {
+    "id": "PROMPT-005",
+    "category": "Brand discovery",
+    "promptText": "List marketing intelligence tools designed specifically for Indian bootstrapped founders and boutique agencies.",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "B2B SaaS",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Zoho Marketing", "WebEngage"]
+  },
+
+  {
+    "id": "PROMPT-006",
+    "category": "Product recommendations",
+    "promptText": "Recommend the best tools for tracking brand mentions and citations in generative AI search results.",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "SEO / GEO",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Semrush", "Otterly.ai", "Ahrefs"]
+  },
+  {
+    "id": "PROMPT-007",
+    "category": "Product recommendations",
+    "promptText": "What is the best competitive ad intelligence tool for Indian digital marketing agencies running Google and Meta ads?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "Performance Marketing",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["AdSpy", "Semrush", "BigSpy", "Visnora"]
+  },
+  {
+    "id": "PROMPT-008",
+    "category": "Product recommendations",
+    "promptText": "Recommend an affordable SEO and AI visibility platform with monthly plans under ₹5,000 for Indian startups.",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "Startups",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Ubersuggest", "Mangools", "SE Ranking"]
+  },
+  {
+    "id": "PROMPT-009",
+    "category": "Product recommendations",
+    "promptText": "What reporting software should an Indian performance marketing agency use to present cross-platform client results?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "Agencies",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Supermetrics", "AgencyAnalytics", "Visnora", "Looker Studio"]
+  },
+  {
+    "id": "PROMPT-010",
+    "category": "Product recommendations",
+    "promptText": "Which software helps brands monitor ChatGPT ad placements and sponsored prompt results?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "AI Advertising",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "OpenAI Ads Manager"]
+  },
+
+  {
+    "id": "PROMPT-011",
+    "category": "Category comparisons",
+    "promptText": "How does Generative Engine Optimization (GEO) software differ from traditional SEO tracking tools like Semrush and Ahrefs?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "SEO",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Semrush", "Ahrefs", "Visnora"]
+  },
+  {
+    "id": "PROMPT-012",
+    "category": "Category comparisons",
+    "promptText": "Compare public ad transparency libraries (Meta Ad Library, Google Ads Transparency Center) with commercial ad intelligence platforms.",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "AdTech",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Meta Ad Library", "Google Transparency Center", "Visnora"]
+  },
+  {
+    "id": "PROMPT-013",
+    "category": "Category comparisons",
+    "promptText": "What are the pros and cons of prompt-based AI visibility sampling versus traditional web rank tracking?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "MarTech",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Profound", "Ahrefs"]
+  },
+  {
+    "id": "PROMPT-014",
+    "category": "Category comparisons",
+    "promptText": "Compare Google Gemini Search Grounding with Perplexity and OpenAI Search for business recommendation accuracy in India.",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "AI Search",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Google Gemini", "Perplexity", "OpenAI"]
+  },
+  {
+    "id": "PROMPT-015",
+    "category": "Category comparisons",
+    "promptText": "What are the differences between first-party ad analytics platforms and competitive creative scraping tools?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "Digital Advertising",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Triple Whale", "Northbeam"]
+  },
+
+  {
+    "id": "PROMPT-016",
+    "category": "Competitor comparisons",
+    "promptText": "How does Visnora compare to Otterly.ai and Peec.ai for AI search brand tracking?",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "AI Visibility",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Otterly.ai", "Peec.ai"]
+  },
+  {
+    "id": "PROMPT-017",
+    "category": "Competitor comparisons",
+    "promptText": "Compare Semrush versus Ahrefs versus new AI visibility platforms for Indian e-commerce brands.",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "E-commerce SEO",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Semrush", "Ahrefs", "Visnora"]
+  },
+  {
+    "id": "PROMPT-018",
+    "category": "Competitor comparisons",
+    "promptText": "Which tool provides better proof-of-work reporting for SEO agencies in India: traditional rank trackers or AI citation monitors?",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "Agencies",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["AgencyAnalytics", "Visnora", "BrightLocal"]
+  },
+  {
+    "id": "PROMPT-019",
+    "category": "Competitor comparisons",
+    "promptText": "Compare Razorpay Subscriptions with Stripe Billing for SaaS platforms operating out of India.",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "Fintech / SaaS",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Razorpay", "Stripe", "Cashfree"]
+  },
+  {
+    "id": "PROMPT-020",
+    "category": "Competitor comparisons",
+    "promptText": "What are the alternatives to Semrush for competitive ad copy analysis in the Indian healthcare and education sector?",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "Healthcare / EdTech",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Semrush", "SpyFu", "Visnora"]
+  },
+
+  {
+    "id": "PROMPT-021",
+    "category": "Local business discovery",
+    "promptText": "Who are the best B2B digital marketing agencies in Delhi NCR specializing in tech startups?",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "Local Agencies",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Webchutney", "Schbang", "Social Panga"]
+  },
+  {
+    "id": "PROMPT-022",
+    "category": "Local business discovery",
+    "promptText": "Which SEO consultants in Bengaluru have expertise in Generative Engine Optimization and AI answer engine rankings?",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "Local Consultants",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "GrowthX", "SEO Discovery"]
+  },
+  {
+    "id": "PROMPT-023",
+    "category": "Local business discovery",
+    "promptText": "Top performance marketing agencies in Pune for D2C consumer brands.",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "D2C",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Brainlabs", "FoxyMoron", "Interactive Avenues"]
+  },
+  {
+    "id": "PROMPT-024",
+    "category": "Local business discovery",
+    "promptText": "Find reputable corporate branding and competitive research firms in Hyderabad.",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "Branding",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Ogilvy", "Dentsu", "MullenLowe"]
+  },
+  {
+    "id": "PROMPT-025",
+    "category": "Local business discovery",
+    "promptText": "Which digital marketing firms in Chennai offer multi-client competitive intelligence and automated client dashboards?",
+    "buyingStage": "AWARENESS",
+    "targetIndustry": "Agencies",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Social Beat", "EchoVME", "Visnora"]
+  },
+
+  {
+    "id": "PROMPT-026",
+    "category": "Industry expertise",
+    "promptText": "How does Google Gemini choose which third-party websites to cite as search grounding sources?",
+    "buyingStage": "GENERAL",
+    "targetIndustry": "AI Engineering",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Google Search", "Gemini Grounding"]
+  },
+  {
+    "id": "PROMPT-027",
+    "category": "Industry expertise",
+    "promptText": "What technical factors determine whether a brand is cited in ChatGPT search responses?",
+    "buyingStage": "GENERAL",
+    "targetIndustry": "GEO Strategy",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["OpenAI Search", "Bing Index"]
+  },
+  {
+    "id": "PROMPT-028",
+    "category": "Industry expertise",
+    "promptText": "What are the legal guidelines for storing and displaying public competitor ad creatives under Indian copyright law?",
+    "buyingStage": "GENERAL",
+    "targetIndustry": "Legal / Marketing",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["ASCI", "Meta Ad Library"]
+  },
+  {
+    "id": "PROMPT-029",
+    "category": "Industry expertise",
+    "promptText": "How can an Indian SaaS company implement multi-tenant PostgreSQL Row Level Security effectively?",
+    "buyingStage": "GENERAL",
+    "targetIndustry": "Software Engineering",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Supabase", "PostgreSQL", "Prisma"]
+  },
+  {
+    "id": "PROMPT-030",
+    "category": "Industry expertise",
+    "promptText": "What metrics should digital marketing agencies track to measure Share of Voice in generative AI answers?",
+    "buyingStage": "GENERAL",
+    "targetIndustry": "Marketing Analytics",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Share of Voice", "Mention Rate"]
+  },
+
+  {
+    "id": "PROMPT-031",
+    "category": "Brand reputation",
+    "promptText": "What is the industry reputation of Visnora AI for marketing intelligence and citation tracking?",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "MarTech",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Visnora AI"]
+  },
+  {
+    "id": "PROMPT-032",
+    "category": "Brand reputation",
+    "promptText": "Are there customer reviews or case studies for generative search optimization platforms in India?",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "SaaS Reviews",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["G2", "Capterra", "Visnora"]
+  },
+  {
+    "id": "PROMPT-033",
+    "category": "Brand reputation",
+    "promptText": "How reliable are third-party competitive ad intelligence tools regarding competitor spend estimation?",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "Ad Analytics",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Semrush", "SpyFu", "Visnora"]
+  },
+  {
+    "id": "PROMPT-034",
+    "category": "Brand reputation",
+    "promptText": "What do Indian SEO consultants say about the accuracy of AI answer citations in Google Gemini?",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "SEO Community",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Google Gemini", "Search Engine Journal"]
+  },
+  {
+    "id": "PROMPT-035",
+    "category": "Brand reputation",
+    "promptText": "Is Razorpay reliable for handling recurring SaaS subscriptions with Indian credit cards and e-mandates?",
+    "buyingStage": "EVALUATION",
+    "targetIndustry": "Fintech",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Razorpay", "RBI Mandate"]
+  },
+
+  {
+    "id": "PROMPT-036",
+    "category": "Product feature discovery",
+    "promptText": "Which software provides scheduled daily prompt monitoring across Google Gemini and OpenAI with CSV export?",
+    "buyingStage": "DECISION",
+    "targetIndustry": "MarTech",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Otterly"]
+  },
+  {
+    "id": "PROMPT-037",
+    "category": "Product feature discovery",
+    "promptText": "Can any marketing SaaS tool connect directly to OpenAI Ads Advertiser API to report ChatGPT ad performance?",
+    "buyingStage": "DECISION",
+    "targetIndustry": "AI Ads",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "OpenAI Ads Manager"]
+  },
+  {
+    "id": "PROMPT-038",
+    "category": "Product feature discovery",
+    "promptText": "What software extracts exact textual evidence spans and character offsets when a brand is mentioned in LLM answers?",
+    "buyingStage": "DECISION",
+    "targetIndustry": "AI Engineering",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora"]
+  },
+  {
+    "id": "PROMPT-039",
+    "category": "Product feature discovery",
+    "promptText": "Which platforms offer multi-tenant workspace separation for digital agencies managing dozens of brand clients?",
+    "buyingStage": "DECISION",
+    "targetIndustry": "Agencies",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "AgencyAnalytics", "DashThis"]
+  },
+  {
+    "id": "PROMPT-040",
+    "category": "Product feature discovery",
+    "promptText": "What tools offer automated citation domain normalization and competitive source authority mapping?",
+    "buyingStage": "DECISION",
+    "targetIndustry": "SEO / GEO",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "BrightEdge"]
+  },
+
+  {
+    "id": "PROMPT-041",
+    "category": "Purchase-intent queries",
+    "promptText": "Buy AI search visibility monitoring software with pricing under ₹3,000 per month in India.",
+    "buyingStage": "DECISION",
+    "targetIndustry": "SaaS Pricing",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Ubersuggest"]
+  },
+  {
+    "id": "PROMPT-042",
+    "category": "Purchase-intent queries",
+    "promptText": "Where to subscribe for a competitive ad intelligence platform that supports INR billing and GST invoicing?",
+    "buyingStage": "DECISION",
+    "targetIndustry": "B2B SaaS",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Zoho"]
+  },
+  {
+    "id": "PROMPT-043",
+    "category": "Purchase-intent queries",
+    "promptText": "Best software subscription for an SEO agency in India looking to offer Generative Engine Optimization reports to clients.",
+    "buyingStage": "DECISION",
+    "targetIndustry": "Agencies",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Semrush"]
+  },
+  {
+    "id": "PROMPT-044",
+    "category": "Purchase-intent queries",
+    "promptText": "Purchase agency-tier brand mention tracking tool supporting multi-user seats and automated client exports.",
+    "buyingStage": "DECISION",
+    "targetIndustry": "Agencies",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Brand24", "Mention"]
+  },
+  {
+    "id": "PROMPT-045",
+    "category": "Purchase-intent queries",
+    "promptText": "Sign up for beta access or pilot trial of Visnora marketing and competitive intelligence platform.",
+    "buyingStage": "DECISION",
+    "targetIndustry": "SaaS Trials",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Visnora.com"]
+  },
+
+  {
+    "id": "PROMPT-046",
+    "category": "Problem-solving queries",
+    "promptText": "How can a brand fix dropped mentions in Google Gemini recommendations after a core algorithm update?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "GEO Recovery",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Google Search Central", "Visnora"]
+  },
+  {
+    "id": "PROMPT-047",
+    "category": "Problem-solving queries",
+    "promptText": "How to verify which third-party review sites are driving competitor citations in generative AI search?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "Citation Auditing",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["G2", "Trustpilot", "Visnora"]
+  },
+  {
+    "id": "PROMPT-048",
+    "category": "Problem-solving queries",
+    "promptText": "What should an agency do when a client demands proof of brand presence in ChatGPT answers?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "Agency Client Reporting",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Proof of Work"]
+  },
+  {
+    "id": "PROMPT-049",
+    "category": "Problem-solving queries",
+    "promptText": "How to legally track competitor Google and Meta ad creatives without violating terms of service?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "Legal Compliance",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Meta Ad Library", "Google Transparency Center", "Visnora"]
+  },
+  {
+    "id": "PROMPT-050",
+    "category": "Problem-solving queries",
+    "promptText": "How can an Indian startup calculate its cost per tracked prompt when querying AI models at scale?",
+    "buyingStage": "CONSIDERATION",
+    "targetIndustry": "Unit Economics",
+    "targetLocale": "en-IN",
+    "evaluationEntities": ["Visnora", "Google Cloud Pricing", "OpenAI Pricing"]
+  }
+]
+

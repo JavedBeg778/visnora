@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": "../..",
+    "paths": {
+      "@/app/*": ["apps/web/app/*"],
+      "@/components/*": ["apps/web/components/*"],
+      "@/lib/*": ["apps/web/lib/*"],
+      "@/styles/*": ["apps/web/styles/*"],
+      "@/database/*": ["packages/database/*"],
+      "@/domain/*": ["packages/domain/*"],
+      "@/integrations/*": ["packages/integrations/*"],
+      "@/jobs/*": ["packages/jobs/*"],
+      "@/shared/*": ["packages/shared/*"]
+    }
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    "../../packages/**/*.ts"
+  ]
+}
+

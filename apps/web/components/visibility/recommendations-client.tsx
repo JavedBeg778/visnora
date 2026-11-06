@@ -10,9 +10,11 @@ import {
   Filter,
   AlertCircle,
   Tag,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { EmptyState } from '../ui/empty-state';
 
 interface RecommendationsClientProps {
   initialRecommendations: any[];
@@ -78,16 +80,16 @@ export function RecommendationsClient({
   return (
     <div className="space-y-6">
       {/* Top Filter Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <label htmlFor="project-select" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <label htmlFor="project-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Project:
           </label>
           <select
             id="project-select"
             value={selectedProjectId}
             onChange={handleProjectChange}
-            className="text-sm font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-subtle"
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -97,14 +99,14 @@ export function RecommendationsClient({
           </select>
         </div>
 
-        <div className="flex items-center space-x-2 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-medium">
+        <div className="flex items-center space-x-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-semibold self-end sm:self-auto">
           {['ALL', 'NEW', 'IN_PROGRESS', 'COMPLETED', 'DISMISSED'].map((st) => (
             <button
               key={st}
               onClick={() => setStatusFilter(st)}
-              className={`px-2.5 py-1 rounded-md transition-colors ${
+              className={`px-3 py-1 rounded-lg transition-all ${
                 statusFilter === st
-                  ? 'bg-white text-blue-700 font-bold shadow-sm'
+                  ? 'bg-white text-blue-700 shadow-subtle font-bold'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -115,7 +117,7 @@ export function RecommendationsClient({
       </div>
 
       {/* Recommendations Cards List */}
-      <div className="space-y-4">
+      <div className="space-y-5">
         {filtered.map((rec) => {
           const isHigh = rec.priority === 'HIGH';
           const isMedium = rec.priority === 'MEDIUM';
@@ -123,19 +125,19 @@ export function RecommendationsClient({
           return (
             <div
               key={rec.id}
-              className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4 hover:border-slate-300 transition-colors"
+              className="bg-white border border-slate-200 rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-all space-y-4"
             >
               {/* Header: Title, Priority, Status */}
-              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-                <div className="flex items-start space-x-3">
-                  <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Lightbulb className="h-4 w-4" />
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 pb-3 border-b border-slate-100">
+                <div className="flex items-start space-x-3.5">
+                  <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0 mt-0.5 border border-blue-100 shadow-subtle">
+                    <Lightbulb className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="flex items-center space-x-2">
-                      <h2 className="text-sm font-bold text-slate-900">{rec.title}</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-base font-bold text-slate-900">{rec.title}</h2>
                       <span
-                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full ${
                           isHigh
                             ? 'bg-rose-100 text-rose-800'
                             : isMedium
@@ -146,12 +148,12 @@ export function RecommendationsClient({
                         {rec.priority} Priority
                       </span>
                       {rec.relatedMetric && (
-                        <span className="text-[10px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                        <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
                           {rec.relatedMetric}
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-600 mt-1.5 leading-relaxed">
+                    <p className="text-xs text-slate-600 mt-2 leading-relaxed">
                       {rec.explanation}
                     </p>
                   </div>
@@ -161,7 +163,7 @@ export function RecommendationsClient({
                 <select
                   value={rec.status}
                   onChange={(e) => handleStatusUpdate(rec.id, e.target.value)}
-                  className="text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 self-start sm:self-auto"
+                  className="text-xs font-bold text-slate-700 bg-slate-50 border border-slate-300 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-subtle self-start sm:self-auto"
                 >
                   <option value="NEW">Status: New</option>
                   <option value="IN_PROGRESS">In Progress</option>
@@ -172,18 +174,18 @@ export function RecommendationsClient({
 
               {/* Evidence Quote */}
               {rec.evidence && (
-                <div className="bg-slate-50 border-l-4 border-blue-500 p-3 rounded-r-lg text-xs text-slate-700">
-                  <span className="font-semibold text-slate-900 block mb-0.5">Observed Evidence:</span>
+                <div className="bg-slate-50 border-l-4 border-blue-500 p-3.5 rounded-r-xl text-xs text-slate-700 leading-relaxed">
+                  <span className="font-bold text-slate-900 block mb-1">Observed Search Output Evidence:</span>
                   <p className="italic">&ldquo;{rec.evidence}&rdquo;</p>
                 </div>
               )}
 
               {/* Suggested Action */}
-              <div className="bg-blue-50/60 border border-blue-100 rounded-lg p-3 text-xs flex items-start space-x-2">
+              <div className="bg-blue-50/70 border border-blue-200/70 rounded-xl p-4 text-xs flex items-start space-x-3">
                 <ArrowRight className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold text-blue-950">Actionable GEO Strategy: </span>
-                  <span className="text-blue-900">{rec.suggestedAction}</span>
+                  <span className="text-blue-900 leading-relaxed">{rec.suggestedAction}</span>
                 </div>
               </div>
             </div>
@@ -191,12 +193,15 @@ export function RecommendationsClient({
         })}
 
         {filtered.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-500">
-            No recommendations found matching your criteria. Recommendations are generated automatically from tracking runs and mention gap analysis.
-          </div>
+          <EmptyState
+            icon={<Sparkles className="h-6 w-6" />}
+            title="No recommendations found"
+            description="Strategic visibility recommendations are generated automatically based on competitor gaps and citation discrepancies from tracking runs."
+            actionLabel="View Dashboard"
+            onAction={() => {}}
+          />
         )}
       </div>
     </div>
   );
 }
-

@@ -13,10 +13,14 @@ import {
   Building,
   Target,
   FileText,
+  AlertCircle,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
+import { Input } from '../ui/input';
+import { EmptyState } from '../ui/empty-state';
 
 interface BrandsClientProps {
   initialBrands: any[];
@@ -37,6 +41,7 @@ export function BrandsClient({
   const [editingBrand, setEditingBrand] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -60,7 +65,7 @@ export function BrandsClient({
       const json = await res.json();
       if (json.success) setBrands(json.data);
     } catch {
-      // Keep existing
+      // Retain existing data
     }
   };
 
@@ -111,6 +116,7 @@ export function BrandsClient({
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     const payload = {
       projectId: selectedProjectId,
@@ -149,6 +155,7 @@ export function BrandsClient({
       }
 
       setIsModalOpen(false);
+      setSuccess(`Brand "${payload.canonicalName}" saved successfully.`);
       await refreshBrands(selectedProjectId);
     } catch (err: any) {
       setError(err.message);
@@ -157,8 +164,8 @@ export function BrandsClient({
     }
   };
 
-  const handleArchive = async (brandId: string) => {
-    if (!confirm('Are you sure you want to archive this brand profile?')) return;
+  const handleArchive = async (brandId: string, name: string) => {
+    if (!confirm(`Are you sure you want to archive brand profile "${name}"?`)) return;
     try {
       const res = await fetch(`/api/v1/brands/${brandId}`, {
         method: 'DELETE',
@@ -166,6 +173,7 @@ export function BrandsClient({
       });
       const json = await res.json();
       if (json.success) {
+        setSuccess(`Brand "${name}" archived.`);
         await refreshBrands(selectedProjectId);
       }
     } catch {
@@ -176,16 +184,16 @@ export function BrandsClient({
   return (
     <div className="space-y-6">
       {/* Top Filter and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <label htmlFor="project-select" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <label htmlFor="project-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Project Container:
           </label>
           <select
             id="project-select"
             value={selectedProjectId}
             onChange={handleProjectChange}
-            className="text-sm font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-subtle"
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -195,51 +203,62 @@ export function BrandsClient({
           </select>
         </div>
 
-        <Button size="sm" onClick={openCreateModal} className="bg-blue-600 hover:bg-blue-700 text-white">
+        <Button size="sm" onClick={openCreateModal} className="self-end sm:self-auto">
           <Plus className="h-4 w-4 mr-1.5" />
           <span>Add Brand Profile</span>
         </Button>
       </div>
+
+      {success && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center space-x-2 text-xs text-emerald-800">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
 
       {/* Brands List */}
       <div className="grid grid-cols-1 gap-5">
         {brands.map((brand) => (
           <div
             key={brand.id}
-            className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:border-slate-300 transition-all space-y-4"
+            className="bg-white border border-slate-200 rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-all space-y-5"
           >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pb-3 border-b border-slate-100">
-              <div className="flex items-center space-x-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg">
-                  {brand.canonicalName.charAt(0)}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100">
+              <div className="flex items-center space-x-3.5">
+                <div className="h-11 w-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg border border-blue-100 shadow-subtle">
+                  {brand.canonicalName.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2.5">
                     <h2 className="text-base font-bold text-slate-900">{brand.canonicalName}</h2>
                     {brand.isPrimary && (
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 flex items-center space-x-1">
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 flex items-center space-x-1">
                         <Star className="h-3 w-3 fill-blue-600" />
                         <span>Primary Brand</span>
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center space-x-2 mt-0.5 text-xs text-slate-500">
-                    <span className="font-medium text-slate-700">{brand.domain}</span>
+                  <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-slate-500">
+                    <span className="font-semibold text-slate-800 font-mono">{brand.domain}</span>
                     <span>•</span>
                     <span>{brand.industry || 'General Industry'}</span>
                     <span>•</span>
-                    <span>{brand.country || 'IN'}</span>
+                    <span>Region: {brand.country || 'IN'}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-2">
+              <div className="flex items-center space-x-2 self-end sm:self-auto">
                 <Button variant="secondary" size="sm" onClick={() => openEditModal(brand)}>
                   <Edit2 className="h-3.5 w-3.5 mr-1" />
                   <span>Edit</span>
                 </Button>
                 {!brand.isPrimary && (
-                  <Button variant="danger" size="sm" onClick={() => handleArchive(brand.id)}>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleArchive(brand.id, brand.canonicalName)}
+                  >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 )}
@@ -248,14 +267,17 @@ export function BrandsClient({
 
             {/* Products and Services */}
             <div>
-              <div className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center space-x-1.5">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
                 <Tag className="h-3.5 w-3.5 text-slate-400" />
-                <span>Products & Services:</span>
+                <span>Products &amp; Solutions</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {brand.productsServices && brand.productsServices.length > 0 ? (
                   brand.productsServices.map((p: string, i: number) => (
-                    <span key={i} className="text-xs bg-slate-100 text-slate-700 font-medium px-2.5 py-0.5 rounded-md">
+                    <span
+                      key={i}
+                      className="text-xs bg-slate-100 text-slate-800 font-semibold px-2.5 py-1 rounded-lg border border-slate-200/60"
+                    >
                       {p}
                     </span>
                   ))
@@ -267,36 +289,39 @@ export function BrandsClient({
 
             {/* Brand Keywords */}
             <div>
-              <div className="text-xs font-semibold text-slate-500 mb-1.5 flex items-center space-x-1.5">
+              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
                 <Target className="h-3.5 w-3.5 text-slate-400" />
-                <span>Brand Keywords:</span>
+                <span>Brand Keywords &amp; Entity Aliases</span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {brand.brandKeywords && brand.brandKeywords.length > 0 ? (
                   brand.brandKeywords.map((k: string, i: number) => (
-                    <span key={i} className="text-xs bg-blue-50 text-blue-700 font-medium px-2.5 py-0.5 rounded-md">
+                    <span
+                      key={i}
+                      className="text-xs bg-blue-50 text-blue-700 font-semibold px-2.5 py-1 rounded-lg border border-blue-200/60"
+                    >
                       #{k}
                     </span>
                   ))
                 ) : (
-                  <span className="text-xs text-slate-400 italic">No brand keywords specified.</span>
+                  <span className="text-xs text-slate-400 italic">No brand aliases specified.</span>
                 )}
               </div>
             </div>
 
-            {/* Target Audience & Strategic Context */}
+            {/* Target Audience & Positioning */}
             {(brand.targetAudience || brand.brandContext) && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-100 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-100 text-xs">
                 {brand.targetAudience && (
-                  <div>
-                    <span className="font-semibold text-slate-700">Target Audience:</span>
-                    <p className="text-slate-600 mt-0.5">{brand.targetAudience}</p>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60">
+                    <span className="font-bold text-slate-800 block mb-1">Target Audience</span>
+                    <p className="text-slate-600 leading-relaxed">{brand.targetAudience}</p>
                   </div>
                 )}
                 {brand.brandContext && (
-                  <div>
-                    <span className="font-semibold text-slate-700">Brand Context & Positioning:</span>
-                    <p className="text-slate-600 mt-0.5">{brand.brandContext}</p>
+                  <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200/60">
+                    <span className="font-bold text-slate-800 block mb-1">Brand Context &amp; Positioning</span>
+                    <p className="text-slate-600 leading-relaxed">{brand.brandContext}</p>
                   </div>
                 )}
               </div>
@@ -305,110 +330,91 @@ export function BrandsClient({
         ))}
 
         {brands.length === 0 && (
-          <div className="bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-500">
-            No brand profiles configured yet for this project. Click &ldquo;Add Brand Profile&rdquo; to configure your primary brand identity.
-          </div>
+          <EmptyState
+            icon={<Globe2 className="h-6 w-6" />}
+            title="No brand profiles configured"
+            description="Create your primary brand profile to establish official products, services, and aliases for search recognition."
+            actionLabel="Add Brand Profile"
+            onAction={openCreateModal}
+          />
         )}
       </div>
 
       {/* Modal Dialog for Create/Edit */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-lg w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-base font-bold text-slate-900">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-modal max-w-lg w-full p-6 sm:p-8 space-y-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-lg font-bold text-slate-900">
               {editingBrand ? 'Edit Brand Profile' : 'Configure Brand Profile'}
             </h2>
+            <p className="text-xs text-slate-500">
+              Specify official domain, entity aliases, and products to evaluate accurate AI mention attribution.
+            </p>
 
             {error && (
-              <div className="p-3 rounded-lg bg-rose-50 text-rose-700 text-xs font-semibold">
+              <div className="p-3.5 rounded-xl bg-red-50 text-red-800 text-xs font-medium border border-red-200">
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleSave} className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Brand Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.canonicalName}
-                  onChange={(e) => setFormData({ ...formData, canonicalName: e.target.value })}
-                  placeholder="e.g. Acme Cloud"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+            <form onSubmit={handleSave} className="space-y-4 text-xs">
+              <Input
+                label="Brand Name *"
+                required
+                value={formData.canonicalName}
+                onChange={(e) => setFormData({ ...formData, canonicalName: e.target.value })}
+                placeholder="e.g. Acme Cloud"
+              />
 
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Domain *</label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.domain}
-                    onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                    placeholder="acme.com"
-                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="font-semibold text-slate-700 block mb-1">Industry</label>
-                  <input
-                    type="text"
-                    value={formData.industry}
-                    onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                    placeholder="SaaS / FinTech"
-                    className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Products & Services (comma separated)
-                </label>
-                <input
-                  type="text"
-                  value={formData.productsServicesText}
-                  onChange={(e) => setFormData({ ...formData, productsServicesText: e.target.value })}
-                  placeholder="CRM, AI Search Optimization, Marketing Analytics"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                <Input
+                  label="Domain *"
+                  required
+                  value={formData.domain}
+                  onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+                  placeholder="acme.com"
+                />
+                <Input
+                  label="Industry / Vertical"
+                  value={formData.industry}
+                  onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                  placeholder="SaaS / FinTech"
                 />
               </div>
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Brand Keywords & Aliases (comma separated)
-                </label>
-                <input
-                  type="text"
-                  value={formData.brandKeywordsText}
-                  onChange={(e) => setFormData({ ...formData, brandKeywordsText: e.target.value })}
-                  placeholder="acme, acme analytics, acme cloud"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+              <Input
+                label="Products & Services (comma separated)"
+                value={formData.productsServicesText}
+                onChange={(e) => setFormData({ ...formData, productsServicesText: e.target.value })}
+                placeholder="CRM, AI Search Optimization, Marketing Analytics"
+                helperText="Specific offerings that generative engines should associate with your brand."
+              />
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Target Audience</label>
-                <input
-                  type="text"
-                  value={formData.targetAudience}
-                  onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
-                  placeholder="Marketing managers, SEO professionals, agencies"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+              <Input
+                label="Brand Keywords & Aliases (comma separated)"
+                value={formData.brandKeywordsText}
+                onChange={(e) => setFormData({ ...formData, brandKeywordsText: e.target.value })}
+                placeholder="acme, acme analytics, acme cloud"
+                helperText="Alternative names or abbreviations used to detect mentions in AI responses."
+              />
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
+              <Input
+                label="Target Audience"
+                value={formData.targetAudience}
+                onChange={(e) => setFormData({ ...formData, targetAudience: e.target.value })}
+                placeholder="Marketing managers, SEO professionals, agencies"
+              />
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-700">
                   Brand Context / Positioning Brief
                 </label>
                 <textarea
-                  rows={2}
+                  rows={3}
                   value={formData.brandContext}
                   onChange={(e) => setFormData({ ...formData, brandContext: e.target.value })}
                   placeholder="Acme is a premium visibility analytics platform specializing in Generative Engine Optimization..."
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="block w-full px-3.5 py-2 text-xs text-slate-900 bg-white border border-slate-300 rounded-xl shadow-subtle focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
 
@@ -420,12 +426,12 @@ export function BrandsClient({
                   onChange={(e) => setFormData({ ...formData, isPrimary: e.target.checked })}
                   className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                 />
-                <label htmlFor="isPrimary" className="font-medium text-slate-700">
+                <label htmlFor="isPrimary" className="font-semibold text-slate-700">
                   Set as Primary Brand for this Project
                 </label>
               </div>
 
-              <div className="flex items-center justify-end space-x-2 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
                 <Button
                   type="button"
                   variant="secondary"
@@ -435,8 +441,8 @@ export function BrandsClient({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" disabled={loading} className="bg-blue-600 text-white">
-                  {loading ? 'Saving...' : 'Save Brand Profile'}
+                <Button type="submit" size="sm" isLoading={loading}>
+                  Save Brand Profile
                 </Button>
               </div>
             </form>
@@ -446,4 +452,3 @@ export function BrandsClient({
     </div>
   );
 }
-

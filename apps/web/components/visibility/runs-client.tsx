@@ -12,9 +12,11 @@ import {
   ChevronRight,
   Coins,
   Cpu,
+  Layers,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { EmptyState } from '../ui/empty-state';
 
 interface RunsClientProps {
   initialRuns: any[];
@@ -71,13 +73,13 @@ export function RunsClient({
       });
       const json = await res.json();
       if (json.success) {
-        setMessage(`New tracking run completed! ${json.data.summary.successCount} prompt(s) processed.`);
+        setMessage(`Tracking run pipeline completed! Successfully evaluated ${json.data.summary.successCount} prompt query sample(s).`);
         await refreshRuns(selectedProjectId);
       } else {
         setMessage(`Run notice: ${json.error?.message || 'Could not complete tracking run'}`);
       }
     } catch (err: any) {
-      setMessage(`Error: ${err.message || 'Run failed'}`);
+      setMessage(`Error: ${err.message || 'Run execution failed'}`);
     } finally {
       setRunning(false);
     }
@@ -86,16 +88,16 @@ export function RunsClient({
   return (
     <div className="space-y-6">
       {/* Top Controls Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <label htmlFor="project-select" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <label htmlFor="project-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Project:
           </label>
           <select
             id="project-select"
             value={selectedProjectId}
             onChange={handleProjectChange}
-            className="text-sm font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-subtle"
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -109,33 +111,37 @@ export function RunsClient({
           size="sm"
           onClick={handleStartRun}
           disabled={running}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
+          className="self-end sm:self-auto"
         >
-          {running ? <RotateCw className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Play className="h-3.5 w-3.5 mr-1.5" />}
-          <span>{running ? 'Running Pipeline...' : 'Start New Tracking Run'}</span>
+          {running ? (
+            <RotateCw className="h-4 w-4 mr-1.5 animate-spin" />
+          ) : (
+            <Play className="h-4 w-4 mr-1.5" />
+          )}
+          <span>{running ? 'Evaluating Pipeline...' : 'Start New Tracking Run'}</span>
         </Button>
       </div>
 
       {message && (
-        <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 text-xs font-semibold text-blue-800 flex items-center space-x-2">
+        <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-xs font-medium text-blue-800 flex items-center space-x-2.5 animate-in fade-in duration-200">
           <CheckCircle2 className="h-4 w-4 text-blue-600 flex-shrink-0" />
           <span>{message}</span>
         </div>
       )}
 
       {/* Runs Table */}
-      <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-card">
         <div className="overflow-x-auto">
           <table className="w-full text-xs text-left">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
+            <thead className="bg-slate-50/70 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px]">
               <tr>
-                <th className="px-4 py-3 font-semibold">Run ID & Date</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 font-semibold">Model / Provider</th>
-                <th className="px-4 py-3 font-semibold text-center">Prompts</th>
-                <th className="px-4 py-3 font-semibold text-right">Tokens</th>
-                <th className="px-4 py-3 font-semibold text-right">Cost (Paise / ₹)</th>
-                <th className="px-4 py-3 font-semibold text-right">Details</th>
+                <th className="px-6 py-3.5 font-bold">Run ID &amp; Timestamp</th>
+                <th className="px-6 py-3.5 font-bold">Execution Status</th>
+                <th className="px-6 py-3.5 font-bold">Model &amp; Provider</th>
+                <th className="px-6 py-3.5 font-bold text-center">Evaluated Prompts</th>
+                <th className="px-6 py-3.5 font-bold text-right">Tokens</th>
+                <th className="px-6 py-3.5 font-bold text-right">Cost (Paise / ₹)</th>
+                <th className="px-6 py-3.5 font-bold text-right">Inspection</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -150,8 +156,8 @@ export function RunsClient({
 
                 return (
                   <tr key={run.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="px-4 py-3.5">
-                      <div className="font-semibold text-slate-900 font-mono text-[11px]">
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-slate-900 font-mono text-xs">
                         {run.id.slice(0, 8)}...
                       </div>
                       <div className="text-[10px] text-slate-400 mt-0.5">
@@ -159,9 +165,9 @@ export function RunsClient({
                       </div>
                     </td>
 
-                    <td className="px-4 py-3.5">
+                    <td className="px-6 py-4">
                       <span
-                        className={`inline-flex items-center space-x-1 px-2 py-0.5 rounded text-[10px] font-bold ${
+                        className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                           isSuccess
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                             : isPartial
@@ -176,35 +182,35 @@ export function RunsClient({
                       </span>
                     </td>
 
-                    <td className="px-4 py-3.5">
-                      <div className="font-medium text-slate-800">{run.model}</div>
-                      <div className="text-[10px] text-slate-400">{run.provider}</div>
+                    <td className="px-6 py-4">
+                      <div className="font-semibold text-slate-800">{run.model}</div>
+                      <div className="text-[10px] text-slate-400 uppercase tracking-wider">{run.provider}</div>
                     </td>
 
-                    <td className="px-4 py-3.5 text-center">
+                    <td className="px-6 py-4 text-center">
                       <span className="font-bold text-slate-900">{run.successCount}</span>
                       <span className="text-slate-400"> / {run.promptCount}</span>
                       {run.failedCount > 0 && (
-                        <div className="text-[10px] text-rose-600 font-medium">
+                        <div className="text-[10px] text-rose-600 font-bold">
                           ({run.failedCount} failed)
                         </div>
                       )}
                     </td>
 
-                    <td className="px-4 py-3.5 text-right font-mono text-slate-700">
+                    <td className="px-6 py-4 text-right font-mono text-slate-700 font-medium">
                       {totalTokens.toLocaleString()}
                     </td>
 
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="px-6 py-4 text-right">
                       <div className="font-bold text-slate-900">₹{costInr}</div>
-                      <div className="text-[10px] text-slate-400">{costPaise} paise</div>
+                      <div className="text-[10px] text-slate-400 font-mono">{costPaise} paise</div>
                     </td>
 
-                    <td className="px-4 py-3.5 text-right">
+                    <td className="px-6 py-4 text-right">
                       <Link href={`/runs/${run.id}`}>
-                        <Button variant="secondary" size="sm" className="text-xs">
+                        <Button variant="secondary" size="sm">
                           <span>Inspect</span>
-                          <ChevronRight className="h-3 w-3 ml-1" />
+                          <ChevronRight className="h-3.5 w-3.5 ml-1" />
                         </Button>
                       </Link>
                     </td>
@@ -214,8 +220,8 @@ export function RunsClient({
 
               {runs.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-xs text-slate-500">
-                    No tracking runs executed yet. Click &ldquo;Start New Tracking Run&rdquo; to analyze your tracked prompts against Gemini.
+                  <td colSpan={7} className="px-6 py-12 text-center text-xs text-slate-400">
+                    No tracking runs executed yet. Click &ldquo;Start New Tracking Run&rdquo; to analyze your prompt catalog against Google Gemini.
                   </td>
                 </tr>
               )}

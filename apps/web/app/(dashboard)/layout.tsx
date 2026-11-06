@@ -4,8 +4,7 @@ import { cookies } from 'next/headers';
 import { createClient } from '../../lib/supabase/server';
 import { getOrganizationsForUser } from '@/domain/organizations/service';
 import { syncUserProfile } from '@/domain/administration/user-service';
-import { Sidebar } from '../../components/dashboard/sidebar';
-import { Header } from '../../components/dashboard/header';
+import { DashboardShell } from '../../components/dashboard/dashboard-shell';
 
 export default async function DashboardLayout({
   children,
@@ -60,25 +59,14 @@ export default async function DashboardLayout({
   const workspaces = currentOrg?.workspaces || [];
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
-      {/* Sidebar Navigation */}
-      <Sidebar currentOrgName={currentOrg.name} currentRole={currentOrg.role} />
-
-      {/* Main Content Viewport */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Header
-          organizations={userOrgs}
-          workspaces={workspaces}
-          currentOrgId={currentOrg.id}
-          currentWorkspaceId={workspaces[0]?.id}
-          userEmail={userEmail}
-          userFullName={userFullName}
-        />
-
-        <main className="flex-1 bg-slate-50 p-6 md:p-8 overflow-y-auto">
-          <div className="max-w-7xl mx-auto space-y-8">{children}</div>
-        </main>
-      </div>
-    </div>
+    <DashboardShell
+      userOrgs={userOrgs}
+      currentOrg={currentOrg}
+      workspaces={workspaces}
+      userEmail={userEmail}
+      userFullName={userFullName}
+    >
+      {children}
+    </DashboardShell>
   );
 }

@@ -11,9 +11,13 @@ import {
   BarChart3,
   Tag,
   Target,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
+import { Input } from '../ui/input';
+import { EmptyState } from '../ui/empty-state';
 
 interface CompetitorsClientProps {
   initialCompetitors: any[];
@@ -34,6 +38,7 @@ export function CompetitorsClient({
   const [editingCompetitor, setEditingCompetitor] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     canonicalName: '',
@@ -97,6 +102,7 @@ export function CompetitorsClient({
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(null);
 
     const payload = {
       projectId: selectedProjectId,
@@ -136,6 +142,7 @@ export function CompetitorsClient({
       }
 
       setIsModalOpen(false);
+      setSuccess(`Competitor "${payload.canonicalName}" saved successfully.`);
       await refreshCompetitors(selectedProjectId);
     } catch (err: any) {
       setError(err.message);
@@ -144,8 +151,8 @@ export function CompetitorsClient({
     }
   };
 
-  const handleArchive = async (compId: string) => {
-    if (!confirm('Are you sure you want to archive this competitor?')) return;
+  const handleArchive = async (compId: string, name: string) => {
+    if (!confirm(`Are you sure you want to archive competitor "${name}"?`)) return;
     try {
       const res = await fetch(`/api/v1/competitors/${compId}`, {
         method: 'DELETE',
@@ -153,6 +160,7 @@ export function CompetitorsClient({
       });
       const json = await res.json();
       if (json.success) {
+        setSuccess(`Competitor "${name}" archived.`);
         await refreshCompetitors(selectedProjectId);
       }
     } catch {
@@ -163,16 +171,16 @@ export function CompetitorsClient({
   return (
     <div className="space-y-6">
       {/* Top Filter and Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-subtle flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center space-x-3">
-          <label htmlFor="project-select" className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+          <label htmlFor="project-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Project:
           </label>
           <select
             id="project-select"
             value={selectedProjectId}
             onChange={handleProjectChange}
-            className="text-sm font-semibold text-slate-800 bg-white border border-slate-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-subtle"
           >
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
@@ -182,36 +190,43 @@ export function CompetitorsClient({
           </select>
         </div>
 
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-2.5 self-end sm:self-auto">
           <Link href="/competitors/compare">
-            <Button variant="secondary" size="sm" className="flex items-center space-x-1.5">
-              <BarChart3 className="h-4 w-4 text-blue-600" />
+            <Button variant="secondary" size="sm">
+              <BarChart3 className="h-4 w-4 mr-1.5 text-blue-600" />
               <span>Compare Share of Voice</span>
             </Button>
           </Link>
-          <Button size="sm" onClick={openCreateModal} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button size="sm" onClick={openCreateModal}>
             <Plus className="h-4 w-4 mr-1.5" />
             <span>Add Competitor</span>
           </Button>
         </div>
       </div>
 
+      {success && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center space-x-2 text-xs text-emerald-800">
+          <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+          <span>{success}</span>
+        </div>
+      )}
+
       {/* Competitors Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {competitors.map((comp) => (
           <div
             key={comp.id}
-            className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm hover:border-slate-300 transition-all flex flex-col justify-between space-y-4"
+            className="bg-white border border-slate-200 rounded-2xl p-6 shadow-card hover:shadow-card-hover transition-all flex flex-col justify-between space-y-4"
           >
             <div>
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
                 <div className="flex items-center space-x-3">
-                  <div className="h-9 w-9 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm">
-                    {comp.canonicalName.charAt(0)}
+                  <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-sm border border-indigo-100 shadow-subtle">
+                    {comp.canonicalName.charAt(0).toUpperCase()}
                   </div>
                   <div>
                     <h2 className="text-sm font-bold text-slate-900">{comp.canonicalName}</h2>
-                    <span className="text-xs text-slate-500 font-medium">{comp.domain}</span>
+                    <span className="text-xs text-slate-500 font-mono font-medium">{comp.domain}</span>
                   </div>
                 </div>
 
@@ -219,22 +234,31 @@ export function CompetitorsClient({
                   <Button variant="ghost" size="sm" onClick={() => openEditModal(comp)}>
                     <Edit2 className="h-3.5 w-3.5 text-slate-500" />
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleArchive(comp.id)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleArchive(comp.id, comp.canonicalName)}
+                  >
                     <Trash2 className="h-3.5 w-3.5 text-rose-500" />
                   </Button>
                 </div>
               </div>
 
               {comp.description && (
-                <p className="text-xs text-slate-600 mt-3 line-clamp-2">{comp.description}</p>
+                <p className="text-xs text-slate-600 mt-3 line-clamp-2 leading-relaxed">{comp.description}</p>
               )}
 
               {comp.productsServices && comp.productsServices.length > 0 && (
-                <div className="mt-3">
-                  <span className="text-[11px] font-semibold text-slate-400 block mb-1">Products & Services:</span>
+                <div className="mt-3.5">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Products & Services:
+                  </span>
                   <div className="flex flex-wrap gap-1">
                     {comp.productsServices.map((p: string, i: number) => (
-                      <span key={i} className="text-[10px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded">
+                      <span
+                        key={i}
+                        className="text-[11px] bg-slate-100 text-slate-800 font-medium px-2 py-0.5 rounded-md"
+                      >
                         {p}
                       </span>
                     ))}
@@ -243,11 +267,16 @@ export function CompetitorsClient({
               )}
 
               {comp.keywords && comp.keywords.length > 0 && (
-                <div className="mt-2.5">
-                  <span className="text-[11px] font-semibold text-slate-400 block mb-1">Keywords:</span>
+                <div className="mt-3">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                    Recognized Aliases:
+                  </span>
                   <div className="flex flex-wrap gap-1">
                     {comp.keywords.map((k: string, i: number) => (
-                      <span key={i} className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-medium">
+                      <span
+                        key={i}
+                        className="text-[11px] bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded-md border border-indigo-100"
+                      >
                         #{k}
                       </span>
                     ))}
@@ -256,14 +285,14 @@ export function CompetitorsClient({
               )}
             </div>
 
-            <div className="pt-3 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
+            <div className="pt-3.5 border-t border-slate-100 text-[11px] text-slate-400 flex items-center justify-between">
               <span>Added {new Date(comp.createdAt).toLocaleDateString()}</span>
               {comp.website && (
                 <a
                   href={comp.website.startsWith('http') ? comp.website : `https://${comp.website}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline flex items-center space-x-1 font-medium"
+                  className="text-blue-600 hover:underline flex items-center space-x-1 font-semibold"
                 >
                   <span>Website</span>
                   <ExternalLink className="h-3 w-3" />
@@ -274,89 +303,75 @@ export function CompetitorsClient({
         ))}
 
         {competitors.length === 0 && (
-          <div className="col-span-full bg-white border border-slate-200 rounded-xl p-8 text-center text-xs text-slate-500">
-            No competitors configured yet. Add competitors to evaluate your relative AI Share of Voice and mention rate.
+          <div className="col-span-full">
+            <EmptyState
+              icon={<Users2 className="h-6 w-6" />}
+              title="No competitors configured"
+              description="Add industry competitors to benchmark your relative AI Share of Voice and mention frequency in search responses."
+              actionLabel="Add First Competitor"
+              onAction={openCreateModal}
+            />
           </div>
         )}
       </div>
 
       {/* Modal Dialog for Competitor */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/30 p-4">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-modal max-w-md w-full p-6 sm:p-8 space-y-4">
             <h2 className="text-base font-bold text-slate-900">
-              {editingCompetitor ? 'Edit Competitor' : 'Add Competitor'}
+              {editingCompetitor ? 'Edit Competitor' : 'Add Competitor Profile'}
             </h2>
+            <p className="text-xs text-slate-500">
+              Configure competitor domain and product aliases to detect their presence in generative outputs.
+            </p>
 
             {error && (
-              <div className="p-3 rounded-lg bg-rose-50 text-rose-700 text-xs font-semibold">
+              <div className="p-3.5 rounded-xl bg-red-50 text-red-800 text-xs font-medium border border-red-200">
                 {error}
               </div>
             )}
 
-            <form onSubmit={handleSave} className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Competitor Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.canonicalName}
-                  onChange={(e) => setFormData({ ...formData, canonicalName: e.target.value })}
-                  placeholder="e.g. Semrush"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+            <form onSubmit={handleSave} className="space-y-4 text-xs">
+              <Input
+                label="Competitor Brand Name *"
+                required
+                value={formData.canonicalName}
+                onChange={(e) => setFormData({ ...formData, canonicalName: e.target.value })}
+                placeholder="e.g. Semrush, HubSpot"
+              />
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Domain *</label>
-                <input
-                  type="text"
-                  required
-                  value={formData.domain}
-                  onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
-                  placeholder="semrush.com"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+              <Input
+                label="Competitor Domain *"
+                required
+                value={formData.domain}
+                onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+                placeholder="semrush.com"
+              />
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">Website URL</label>
-                <input
-                  type="url"
-                  value={formData.website}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                  placeholder="https://semrush.com"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+              <Input
+                label="Website URL"
+                type="url"
+                value={formData.website}
+                onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                placeholder="https://semrush.com"
+              />
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Products & Services (comma separated)
-                </label>
-                <input
-                  type="text"
-                  value={formData.productsServicesText}
-                  onChange={(e) => setFormData({ ...formData, productsServicesText: e.target.value })}
-                  placeholder="SEO Software, Competitive Intelligence, Content Marketing"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+              <Input
+                label="Products & Services (comma separated)"
+                value={formData.productsServicesText}
+                onChange={(e) => setFormData({ ...formData, productsServicesText: e.target.value })}
+                placeholder="SEO Software, Content Marketing, Backlink Audit"
+              />
 
-              <div>
-                <label className="font-semibold text-slate-700 block mb-1">
-                  Keywords & Name Aliases (comma separated)
-                </label>
-                <input
-                  type="text"
-                  value={formData.keywordsText}
-                  onChange={(e) => setFormData({ ...formData, keywordsText: e.target.value })}
-                  placeholder="semrush, sem rush, semrush.com"
-                  className="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                />
-              </div>
+              <Input
+                label="Keywords & Name Aliases (comma separated)"
+                value={formData.keywordsText}
+                onChange={(e) => setFormData({ ...formData, keywordsText: e.target.value })}
+                placeholder="semrush, sem rush, semrush.com"
+              />
 
-              <div className="flex items-center justify-end space-x-2 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100">
                 <Button
                   type="button"
                   variant="secondary"
@@ -366,8 +381,8 @@ export function CompetitorsClient({
                 >
                   Cancel
                 </Button>
-                <Button type="submit" size="sm" disabled={loading} className="bg-blue-600 text-white">
-                  {loading ? 'Saving...' : 'Save Competitor'}
+                <Button type="submit" size="sm" isLoading={loading}>
+                  Save Competitor
                 </Button>
               </div>
             </form>
@@ -377,4 +392,3 @@ export function CompetitorsClient({
     </div>
   );
 }
-

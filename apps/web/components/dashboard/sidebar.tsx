@@ -12,7 +12,6 @@ import {
   Building2,
   Sparkles,
   ChevronRight,
-  TrendingUp,
   Globe2,
   Users2,
   TerminalSquare,
@@ -21,15 +20,24 @@ import {
   BarChart3,
   Lightbulb,
   Clock,
+  X,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '../ui/button';
 
 interface SidebarProps {
   currentOrgName?: string;
   currentRole?: string;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export function Sidebar({ currentOrgName = 'Visnora Workspace', currentRole = 'OWNER' }: SidebarProps) {
+export function Sidebar({
+  currentOrgName = 'Visnora Workspace',
+  currentRole = 'OWNER',
+  isOpen = false,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname();
 
   const visibilityNav = [
@@ -51,38 +59,51 @@ export function Sidebar({ currentOrgName = 'Visnora Workspace', currentRole = 'O
     { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
-  return (
-    <aside className="w-64 flex-shrink-0 bg-white border-r border-slate-200 flex flex-col h-screen sticky top-0 select-none">
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-white select-none">
       {/* Brand & Platform Header */}
-      <div className="h-16 flex items-center px-6 border-b border-slate-200 justify-between">
-        <Link href="/dashboard" className="flex items-center space-x-2.5">
-          <div className="h-8 w-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-base shadow-sm">
+      <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200">
+        <Link href="/dashboard" className="flex items-center space-x-2.5" onClick={onClose}>
+          <div className="h-9 w-9 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
             V
           </div>
           <div>
             <span className="text-base font-bold tracking-tight text-slate-900 block leading-tight">Visnora</span>
-            <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider block">AI Visibility MVP</span>
+            <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wider block">
+              AI Visibility Intelligence
+            </span>
           </div>
         </Link>
+
+        {/* Mobile close button */}
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            aria-label="Close sidebar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
       </div>
 
       {/* Organization Badge Card */}
-      <div className="px-4 py-3 mx-4 my-3 rounded-lg bg-slate-50 border border-slate-200">
+      <div className="px-4 py-3 mx-4 my-3 rounded-xl bg-slate-50 border border-slate-200">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-2 min-w-0">
-            <Building2 className="h-4 w-4 text-slate-500 flex-shrink-0" />
-            <p className="text-xs font-semibold text-slate-900 truncate">{currentOrgName}</p>
+            <Building2 className="h-4 w-4 text-blue-600 flex-shrink-0" />
+            <p className="text-xs font-bold text-slate-900 truncate">{currentOrgName}</p>
           </div>
-          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 uppercase">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 uppercase tracking-wider">
             {currentRole}
           </span>
         </div>
       </div>
 
-      {/* Navigation Links */}
-      <nav className="flex-1 px-3 py-1 space-y-4 overflow-y-auto">
+      {/* Navigation Sections */}
+      <nav className="flex-1 px-3 py-2 space-y-5 overflow-y-auto">
         <div>
-          <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center space-x-1">
+          <div className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
             <Sparkles className="h-3 w-3 text-blue-500" />
             <span>AI Visibility Intelligence</span>
           </div>
@@ -98,18 +119,27 @@ export function Sidebar({ currentOrgName = 'Visnora Workspace', currentRole = 'O
                 <Link
                   key={item.name}
                   href={item.href}
+                  onClick={onClose}
                   className={cn(
-                    'flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+                    'group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all relative',
                     isActive
                       ? 'bg-blue-50 text-blue-700 font-semibold'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   )}
                 >
+                  {isActive && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-blue-600 rounded-r-full" />
+                  )}
                   <div className="flex items-center space-x-2.5">
-                    <Icon className={cn('h-4 w-4 flex-shrink-0', isActive ? 'text-blue-600' : 'text-slate-400')} />
+                    <Icon
+                      className={cn(
+                        'h-4 w-4 flex-shrink-0 transition-colors',
+                        isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700'
+                      )}
+                    />
                     <span>{item.name}</span>
                   </div>
-                  {isActive && <ChevronRight className="h-3 w-3 text-blue-600" />}
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 text-blue-600" />}
                 </Link>
               );
             })}
@@ -117,30 +147,42 @@ export function Sidebar({ currentOrgName = 'Visnora Workspace', currentRole = 'O
         </div>
 
         <div>
-          <div className="px-3 py-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+          <div className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
             Organization & Setup
           </div>
           <div className="mt-1 space-y-0.5">
             {adminNav.map((item) => {
-              const isActive = pathname === item.href || (item.href !== '/settings' && pathname.startsWith(item.href));
+              const isActive =
+                item.href === '/settings'
+                  ? pathname === '/settings'
+                  : pathname.startsWith(item.href);
               const Icon = item.icon;
 
               return (
                 <Link
                   key={item.name}
                   href={item.href}
+                  onClick={onClose}
                   className={cn(
-                    'flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors',
+                    'group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all relative',
                     isActive
                       ? 'bg-blue-50 text-blue-700 font-semibold'
                       : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                   )}
                 >
+                  {isActive && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-blue-600 rounded-r-full" />
+                  )}
                   <div className="flex items-center space-x-2.5">
-                    <Icon className={cn('h-4 w-4 flex-shrink-0', isActive ? 'text-blue-600' : 'text-slate-400')} />
+                    <Icon
+                      className={cn(
+                        'h-4 w-4 flex-shrink-0 transition-colors',
+                        isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700'
+                      )}
+                    />
                     <span>{item.name}</span>
                   </div>
-                  {isActive && <ChevronRight className="h-3 w-3 text-blue-600" />}
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 text-blue-600" />}
                 </Link>
               );
             })}
@@ -149,10 +191,35 @@ export function Sidebar({ currentOrgName = 'Visnora Workspace', currentRole = 'O
       </nav>
 
       {/* Footer Info */}
-      <div className="p-3 border-t border-slate-200 text-center bg-slate-50">
-        <p className="text-[11px] text-slate-500 font-medium">Visnora AI Visibility MVP v0.2.0</p>
-        <p className="text-[10px] text-slate-400 mt-0.5">Gemini 3.8 Flash & 3.5 Flash-Lite</p>
+      <div className="p-3.5 border-t border-slate-200 bg-slate-50 text-center space-y-1">
+        <div className="flex items-center justify-center space-x-1 text-[11px] font-semibold text-slate-700">
+          <ShieldCheck className="h-3.5 w-3.5 text-blue-600" />
+          <span>Tenant Isolated Environment</span>
+        </div>
+        <p className="text-[10px] text-slate-400">Visnora Platform v0.2.0 • Gemini 2.5</p>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop Sticky Sidebar */}
+      <aside className="hidden lg:flex w-64 flex-shrink-0 border-r border-slate-200 h-screen sticky top-0 flex-col">
+        {sidebarContent}
+      </aside>
+
+      {/* Mobile Drawer Overlay */}
+      {isOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div
+            className="fixed inset-0 bg-slate-900/30 backdrop-blur-sm transition-opacity"
+            onClick={onClose}
+          />
+          <div className="relative flex-1 flex flex-col max-w-xs w-full bg-white shadow-2xl z-50">
+            {sidebarContent}
+          </div>
+        </div>
+      )}
+    </>
   );
 }

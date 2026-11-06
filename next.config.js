@@ -4,6 +4,15 @@ const path = require('path');
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@prisma/client'],
+  outputFileTracingRoot: path.resolve(__dirname, '.'),
+  outputFileTracingIncludes: {
+    '/api/**/*': [
+      './node_modules/.prisma/client/**/*',
+    ],
+    '/*': [
+      './node_modules/.prisma/client/**/*',
+    ],
+  },
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',

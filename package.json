@@ -5,9 +5,9 @@
   "description": "Visnora — AI-Powered Marketing & Competitive Intelligence SaaS Platform",
   "scripts": {
     "dev": "next dev apps/web",
-    "build": "next build apps/web",
+    "build": "prisma generate --schema=packages/database/prisma/schema.prisma && node scripts/prepare-prisma-vercel.js prebuild && next build apps/web && node scripts/prepare-prisma-vercel.js postbuild",
     "start": "next start apps/web",
-    "postinstall": "prisma generate --schema=packages/database/prisma/schema.prisma",
+    "postinstall": "prisma generate --schema=packages/database/prisma/schema.prisma && node scripts/prepare-prisma-vercel.js prebuild",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

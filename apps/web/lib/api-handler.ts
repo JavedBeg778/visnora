@@ -70,32 +70,49 @@ export function formatErrorResponse(
 }
 
 export async function getAuthenticatedUser(request: NextRequest): Promise<AuthenticatedUser | null> {
-  // If authorization header with bearer token is passed
+  const supabase = await createClient();
+
+  // If authorization header with bearer token is passed (e.g. mobile client or API integration)
   const authHeader = request.headers.get('authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    // In production, verify JWT via Supabase client
+    const token = authHeader.substring(7).trim();
+    if (token) {
+      try {
+        const { data, error } = await supabase.auth.getUser(token);
+        if (!error && data?.user) {
+          return {
+            id: data.user.id,
+            email: data.user.email || 'user@visnora.local',
+          };
+        }
+      } catch (tokenErr) {
+        // Fall through to cookie verification
+      }
+    }
   }
 
+  // Cookie-based session verification (browser client)
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) {
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data?.user) {
       return {
         id: data.user.id,
         email: data.user.email || 'user@visnora.local',
       };
     }
   } catch {
-    // Supabase auth service fallback for tests / local development
+    // Supabase auth service fallback
   }
 
-  // Fallback for local development if headers specify test user
-  const devUserId = request.headers.get('x-dev-user-id');
-  if (devUserId) {
-    return {
-      id: devUserId,
-      email: request.headers.get('x-dev-user-email') || 'dev@visnora.local',
-    };
+  // Strictly gate dev test user fallback to test environment or explicit opt-in
+  if (process.env.NODE_ENV === 'test' || process.env.ENABLE_DEV_AUTH_BYPASS === 'true') {
+    const devUserId = request.headers.get('x-dev-user-id');
+    if (devUserId) {
+      return {
+        id: devUserId,
+        email: request.headers.get('x-dev-user-email') || 'dev@visnora.local',
+      };
+    }
   }
 
   return null;

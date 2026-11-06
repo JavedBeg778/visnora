@@ -2,7 +2,8 @@ import React from 'react';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { createClient } from '../../lib/supabase/server';
-import { getOrganizationsForUser } from '../../../../packages/domain/organizations/service';
+import { getOrganizationsForUser } from '@/domain/organizations/service';
+import { syncUserProfile } from '@/domain/administration/user-service';
 import { Sidebar } from '../../components/dashboard/sidebar';
 import { Header } from '../../components/dashboard/header';
 
@@ -11,20 +12,32 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  let user = null;
-  let userEmail = 'founder@visnora.com';
-  let userId = '00000000-0000-0000-0000-000000000001';
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  const user = data?.user;
 
+  // Strict Server Component route protection: redirect unauthenticated visitors to login
+  if (!user) {
+    redirect('/login');
+  }
+
+  const userEmail = user.email || '';
+  const userId = user.id;
+  const userFullName =
+    user.user_metadata?.full_name ||
+    userEmail.split('@')[0] ||
+    'Visnora User';
+
+  // Ensure user profile exists in database
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) {
-      user = data.user;
-      userEmail = user.email || userEmail;
-      userId = user.id;
-    }
-  } catch {
-    // Development fallback if Supabase auth service is offline
+    await syncUserProfile({
+      id: userId,
+      email: userEmail,
+      fullName: userFullName,
+      avatarUrl: user.user_metadata?.avatar_url,
+    });
+  } catch (err) {
+    console.error('Failed to sync user profile in layout:', err);
   }
 
   // Retrieve user organizations
@@ -32,26 +45,19 @@ export default async function DashboardLayout({
   try {
     userOrgs = await getOrganizationsForUser(userId);
   } catch (err) {
-    // If DB is offline, provide graceful fallback
+    console.error('Failed to load user organizations:', err);
   }
 
-  // If user has no organizations, redirect to onboarding flow
-  if (user && userOrgs.length === 0) {
+  // If authenticated user has no organizations yet, redirect to onboarding flow
+  if (userOrgs.length === 0) {
     redirect('/onboarding');
   }
 
   const cookieStore = await cookies();
   const activeOrgCookie = cookieStore.get('visnora_active_org')?.value;
-  const currentOrg = userOrgs.find((o) => o.id === activeOrgCookie) || userOrgs[0] || {
-    id: 'demo-org',
-    name: 'Acme Technologies',
-    role: 'OWNER',
-    workspaces: [{ id: 'demo-ws', name: 'Primary Workspace', slug: 'primary' }],
-  };
+  const currentOrg = userOrgs.find((o) => o.id === activeOrgCookie) || userOrgs[0];
 
-  const workspaces = currentOrg.workspaces || [
-    { id: 'demo-ws', name: 'Primary Workspace' },
-  ];
+  const workspaces = currentOrg?.workspaces || [];
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -66,7 +72,7 @@ export default async function DashboardLayout({
           currentOrgId={currentOrg.id}
           currentWorkspaceId={workspaces[0]?.id}
           userEmail={userEmail}
-          userFullName={userEmail.split('@')[0]}
+          userFullName={userFullName}
         />
 
         <main className="flex-1 bg-slate-50 p-6 md:p-8 overflow-y-auto">

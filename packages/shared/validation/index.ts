@@ -163,6 +163,7 @@ export const StartTrackingRunSchema = z.object({
   provider: z.enum(['google-gemini', 'openai']).default('google-gemini'),
   model: z.string().min(1).max(100).default('gemini-3.8-flash'),
   enableGrounding: z.boolean().default(false),
+  dryRun: z.boolean().default(false),
 });
 
 export const UpdateRecommendationSchema = z.object({

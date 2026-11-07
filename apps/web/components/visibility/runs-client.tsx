@@ -73,15 +73,50 @@ export function RunsClient({
       });
       const json = await res.json();
       if (json.success) {
-        setMessage(`Tracking run pipeline completed! Successfully evaluated ${json.data.summary.successCount} prompt query sample(s).`);
+        const totalPrompts = json.data.promptCount || json.data.summary?.totalPrompts || 10;
+        setMessage(`Tracking run pipeline initiated! Evaluating ${totalPrompts} prompt query sample(s) in background.`);
         await refreshRuns(selectedProjectId);
+
+        const runId = json.data.id || json.data.trackingRunId;
+        if (runId) {
+          let attempts = 0;
+          const maxAttempts = 24;
+          const pollInterval = setInterval(async () => {
+            attempts++;
+            try {
+              const runRes = await fetch(`/api/v1/tracking/runs/${runId}`, {
+                headers: { 'x-organization-id': organizationId },
+              });
+              const runJson = await runRes.json();
+              if (runJson.success && runJson.data) {
+                const r = runJson.data;
+                if (r.status === 'COMPLETED' || r.status === 'PARTIALLY_COMPLETED' || r.status === 'PARTIAL' || r.status === 'FAILED') {
+                  clearInterval(pollInterval);
+                  setRunning(false);
+                  await refreshRuns(selectedProjectId);
+                  setMessage(`Tracking run complete! Evaluated ${r.successCount}/${r.promptCount} prompt query sample(s).`);
+                }
+              }
+            } catch {
+              // Ignore
+            }
+
+            if (attempts >= maxAttempts) {
+              clearInterval(pollInterval);
+              setRunning(false);
+              await refreshRuns(selectedProjectId);
+            }
+          }, 2500);
+        } else {
+          setRunning(false);
+        }
       } else {
+        setRunning(false);
         setMessage(`Run notice: ${json.error?.message || 'Could not complete tracking run'}`);
       }
     } catch (err: any) {
-      setMessage(`Error: ${err.message || 'Run execution failed'}`);
-    } finally {
       setRunning(false);
+      setMessage(`Error: ${err.message || 'Run execution failed'}`);
     }
   };
 
@@ -147,7 +182,8 @@ export function RunsClient({
             <tbody className="divide-y divide-slate-100">
               {runs.map((run) => {
                 const isSuccess = run.status === 'COMPLETED';
-                const isPartial = run.status === 'PARTIAL';
+                const isRunning = run.status === 'RUNNING' || run.status === 'QUEUED';
+                const isPartial = run.status === 'PARTIALLY_COMPLETED' || run.status === 'PARTIAL';
                 const isFailed = run.status === 'FAILED';
 
                 const totalTokens = (run.totalInputTokens || 0) + (run.totalOutputTokens || 0);
@@ -170,12 +206,15 @@ export function RunsClient({
                         className={`inline-flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                           isSuccess
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                            : isRunning
+                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
                             : isPartial
                             ? 'bg-amber-50 text-amber-700 border border-amber-200'
                             : 'bg-rose-50 text-rose-700 border border-rose-200'
                         }`}
                       >
                         {isSuccess && <CheckCircle2 className="h-3 w-3" />}
+                        {isRunning && <RotateCw className="h-3 w-3 animate-spin" />}
                         {isPartial && <AlertTriangle className="h-3 w-3" />}
                         {isFailed && <XCircle className="h-3 w-3" />}
                         <span>{run.status}</span>
@@ -188,9 +227,9 @@ export function RunsClient({
                     </td>
 
                     <td className="px-6 py-4 text-center">
-                      <span className="font-bold text-slate-900">{run.successCount}</span>
-                      <span className="text-slate-400"> / {run.promptCount}</span>
-                      {run.failedCount > 0 && (
+                      <span className="font-bold text-slate-900">{run.successCount ?? 0}</span>
+                      <span className="text-slate-400"> / {run.promptCount ?? 0}</span>
+                      {(run.failedCount ?? 0) > 0 && (
                         <div className="text-[10px] text-rose-600 font-bold">
                           ({run.failedCount} failed)
                         </div>

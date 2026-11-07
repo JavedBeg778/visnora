@@ -62,7 +62,35 @@ export function estimateTrackingRunCost(
   };
 }
 
-export async function startTrackingRun(options: TrackingRunOptions) {
+async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let currentIndex = 0;
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (currentIndex < items.length) {
+      const index = currentIndex++;
+      results[index] = await fn(items[index], index);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
+}
+
+export interface InitTrackingRunResult {
+  trackingRun: any;
+  prompts: any[];
+  targetBrandEntity: BrandEntity;
+  competitorEntities: BrandEntity[];
+  costEstimate: ReturnType<typeof estimateTrackingRunCost>;
+  executeRun: () => Promise<any>;
+}
+
+export async function initTrackingRun(options: TrackingRunOptions): Promise<InitTrackingRunResult> {
   const { organizationId, projectId, brandId, promptIds, groupId, enableGrounding = false, dryRun = false } = options;
   const provider = options.provider || 'google-gemini';
   const model = options.model || (provider === 'google-gemini' ? 'gemini-3.8-flash' : 'gpt-4o');
@@ -83,6 +111,15 @@ export async function startTrackingRun(options: TrackingRunOptions) {
   let targetBrand = null;
   if (brandId) {
     targetBrand = project.brands.find((b) => b.id === brandId);
+    if (!targetBrand) {
+      // Check if brand exists directly under organization
+      const directBrand = await prisma.brand.findFirst({
+        where: { id: brandId, organizationId, isArchived: false },
+      });
+      if (directBrand) {
+        targetBrand = directBrand;
+      }
+    }
   }
   if (!targetBrand) {
     targetBrand = project.brands.find((b) => b.isPrimary) || project.brands[0];
@@ -150,153 +187,213 @@ export async function startTrackingRun(options: TrackingRunOptions) {
     },
   });
 
-  // 5. Initialize Provider Adapter
-  const adapter = provider === 'openai'
-    ? new OpenAIAdapter({ defaultModel: model })
-    : new GeminiAdapter({ defaultModel: model });
+  const executeRun = async () => {
+    return await executeTrackingRunPrompts({
+      trackingRun,
+      prompts,
+      targetBrandEntity,
+      competitorEntities,
+      provider,
+      model,
+      enableGrounding,
+      dryRun,
+    });
+  };
 
-  let successCount = 0;
-  let failedCount = 0;
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let totalActualCostPaise = 0;
+  return {
+    trackingRun,
+    prompts,
+    targetBrandEntity,
+    competitorEntities,
+    costEstimate,
+    executeRun,
+  };
+}
 
-  // 6. Execute Prompts
-  for (const prompt of prompts) {
-    const executedAt = new Date();
+export async function executeTrackingRunPrompts(params: {
+  trackingRun: any;
+  prompts: any[];
+  targetBrandEntity: BrandEntity;
+  competitorEntities: BrandEntity[];
+  provider: string;
+  model: string;
+  enableGrounding: boolean;
+  dryRun: boolean;
+}) {
+  const {
+    trackingRun,
+    prompts,
+    targetBrandEntity,
+    competitorEntities,
+    provider,
+    model,
+    enableGrounding,
+    dryRun,
+  } = params;
 
-    try {
-      // Execute through adapter (dryRun if specified or fallback)
-      const result = await adapter.runPrompt({
-        promptId: prompt.id,
-        promptText: prompt.promptText,
-        category: prompt.category || 'General Discovery',
-        modelId: model,
-        targetLocale: prompt.targetLocale || 'en-IN',
-        enableGrounding,
-        dryRun,
-        timeoutMs: 40000,
-      });
+  const organizationId = trackingRun.organizationId;
+  const projectId = trackingRun.projectId;
 
-      const inTokens = result.tokenUsage?.inputTokens || 150;
-      const outTokens = result.tokenUsage?.outputTokens || (result.status === 'COMPLETED' ? 450 : 0);
-      const isCompleted = result.status === 'COMPLETED' || result.status === 'DRY_RUN';
+  try {
+    // Initialize Provider Adapter with safety timeouts and minimal retries
+    const adapter =
+      provider === 'openai'
+        ? new OpenAIAdapter({ defaultModel: model })
+        : new GeminiAdapter({ defaultModel: model, maxRetries: 1, timeoutMs: 25000 });
 
-      // Calculate cost in paise
-      const pricing = model.includes('lite') ? GEMINI_3_5_FLASH_LITE_PRICING : GEMINI_3_8_FLASH_PRICING;
-      const costUsd =
-        (inTokens / 1_000_000) * pricing.inputCostPer1MUsd +
-        (outTokens / 1_000_000) * pricing.outputCostPer1MUsd;
-      const costPaise = Math.round(costUsd * USD_TO_INR_EXCHANGE_RATE * 100);
+    // Execute prompts concurrently (concurrency: 3) to prevent timeouts
+    const executionResults = await runWithConcurrency(prompts, 3, async (prompt) => {
+      const executedAt = new Date();
 
-      if (isCompleted) {
-        successCount++;
-        totalInputTokens += inTokens;
-        totalOutputTokens += outTokens;
-        totalActualCostPaise += costPaise;
+      try {
+        const result = await adapter.runPrompt({
+          promptId: prompt.id,
+          promptText: prompt.promptText,
+          category: prompt.category || 'General Discovery',
+          modelId: model,
+          targetLocale: prompt.targetLocale || 'en-IN',
+          enableGrounding,
+          dryRun,
+          timeoutMs: 25000,
+        });
 
-        // Create PromptRun
-        const promptRun = await prisma.promptRun.create({
-          data: {
-            organizationId,
-            projectId,
-            promptId: prompt.id,
-            trackingRunId: trackingRun.id,
-            provider,
-            modelVersion: model,
-            status: 'COMPLETED',
-            latencyMs: result.latencyMs,
+        const inTokens = result.tokenUsage?.inputTokens || 150;
+        const outTokens = result.tokenUsage?.outputTokens || (result.status === 'COMPLETED' ? 450 : 0);
+        const isCompleted = result.status === 'COMPLETED' || result.status === 'DRY_RUN';
+
+        const pricing = model.includes('lite') ? GEMINI_3_5_FLASH_LITE_PRICING : GEMINI_3_8_FLASH_PRICING;
+        const costUsd =
+          (inTokens / 1_000_000) * pricing.inputCostPer1MUsd +
+          (outTokens / 1_000_000) * pricing.outputCostPer1MUsd;
+        const costPaise = Math.round(costUsd * USD_TO_INR_EXCHANGE_RATE * 100);
+
+        if (isCompleted) {
+          // Create PromptRun
+          const promptRun = await prisma.promptRun.create({
+            data: {
+              organizationId,
+              projectId,
+              promptId: prompt.id,
+              trackingRunId: trackingRun.id,
+              provider,
+              modelVersion: model,
+              status: 'COMPLETED',
+              latencyMs: result.latencyMs,
+              inputTokens: inTokens,
+              outputTokens: outTokens,
+              estimatedCostPaise: costPaise,
+              actualCostPaise: costPaise,
+              executedAt,
+            },
+          });
+
+          // Analyze Response
+          const analysis = analyzeAiResponse({
+            rawText: result.rawResponseText,
+            groundingSources: result.groundingMetadata?.sources?.map((s) => ({
+              uri: s.uri,
+              title: s.title,
+            })),
+            targetBrand: targetBrandEntity,
+            competitors: competitorEntities,
+          });
+
+          // Store AiResponse
+          const aiResponse = await prisma.aiResponse.create({
+            data: {
+              organizationId,
+              promptRunId: promptRun.id,
+              rawPayload: (result.rawPayload as any) || { text: result.rawResponseText },
+              normalizedText: analysis.normalizedText,
+              payloadHash: analysis.payloadHash,
+              hasCitations: analysis.hasCitations,
+            },
+          });
+
+          // Store Mentions
+          if (analysis.allMentions.length > 0) {
+            await prisma.responseMention.createMany({
+              data: analysis.allMentions.map((m) => ({
+                organizationId,
+                aiResponseId: aiResponse.id,
+                matchedEntityId: m.matchedEntityId,
+                entityName: m.entityName,
+                mentionType: m.isPrimaryBrand ? 'PRIMARY_BRAND' : 'COMPETITOR',
+                charStart: m.charStart,
+                charEnd: m.charEnd,
+                evidenceText: m.evidenceText,
+                listPosition: m.listPosition,
+                extractionConfidence: m.confidence,
+                sentiment: m.sentiment || 'NOT_EVALUATED',
+                sentimentConfidence: m.sentimentConfidence,
+                isRecommendation: m.isRecommendation || false,
+              })),
+            });
+          }
+
+          // Store Citations
+          if (analysis.citations.length > 0) {
+            await prisma.citation.createMany({
+              data: analysis.citations.map((c) => ({
+                organizationId,
+                aiResponseId: aiResponse.id,
+                url: c.url,
+                domain: c.domain,
+                citationOrder: c.order,
+                anchorText: c.anchorText,
+              })),
+            });
+          }
+
+          // Store AI Usage Record
+          await prisma.aIUsageRecord.create({
+            data: {
+              organizationId,
+              projectId,
+              trackingRunId: trackingRun.id,
+              promptRunId: promptRun.id,
+              provider,
+              model,
+              inputTokens: inTokens,
+              outputTokens: outTokens,
+              estimatedCostPaise: costPaise,
+              actualCostPaise: costPaise,
+              isEstimated: dryRun,
+            },
+          });
+
+          // Update prompt lastRunAt
+          await prisma.trackedPrompt.update({
+            where: { id: prompt.id },
+            data: { lastRunAt: executedAt },
+          });
+
+          return {
+            success: true,
             inputTokens: inTokens,
             outputTokens: outTokens,
-            estimatedCostPaise: costPaise,
-            actualCostPaise: costPaise,
-            executedAt,
-          },
-        });
-
-        // Analyze Response
-        const analysis = analyzeAiResponse({
-          rawText: result.rawResponseText,
-          groundingSources: result.groundingMetadata?.sources?.map((s) => ({
-            uri: s.uri,
-            title: s.title,
-          })),
-          targetBrand: targetBrandEntity,
-          competitors: competitorEntities,
-        });
-
-        // Store AiResponse
-        const aiResponse = await prisma.aiResponse.create({
-          data: {
-            organizationId,
-            promptRunId: promptRun.id,
-            rawPayload: (result.rawPayload as any) || { text: result.rawResponseText },
-            normalizedText: analysis.normalizedText,
-            payloadHash: analysis.payloadHash,
-            hasCitations: analysis.hasCitations,
-          },
-        });
-
-        // Store Mentions
-        if (analysis.allMentions.length > 0) {
-          await prisma.responseMention.createMany({
-            data: analysis.allMentions.map((m) => ({
+            costPaise,
+          };
+        } else {
+          // Run returned an error status from provider
+          await prisma.promptRun.create({
+            data: {
               organizationId,
-              aiResponseId: aiResponse.id,
-              matchedEntityId: m.matchedEntityId,
-              entityName: m.entityName,
-              mentionType: m.isPrimaryBrand ? 'PRIMARY_BRAND' : 'COMPETITOR',
-              charStart: m.charStart,
-              charEnd: m.charEnd,
-              evidenceText: m.evidenceText,
-              listPosition: m.listPosition,
-              extractionConfidence: m.confidence,
-              sentiment: m.sentiment || 'NOT_EVALUATED',
-              sentimentConfidence: m.sentimentConfidence,
-              isRecommendation: m.isRecommendation || false,
-            })),
+              projectId,
+              promptId: prompt.id,
+              trackingRunId: trackingRun.id,
+              provider,
+              modelVersion: model,
+              status: 'FAILED',
+              latencyMs: result.latencyMs,
+              errorCode: result.errorCode || 'PROVIDER_ERROR',
+              errorMessage: result.errorMessage || 'Failed to generate response',
+              executedAt,
+            },
           });
+          return { success: false, inputTokens: 0, outputTokens: 0, costPaise: 0 };
         }
-
-        // Store Citations
-        if (analysis.citations.length > 0) {
-          await prisma.citation.createMany({
-            data: analysis.citations.map((c) => ({
-              organizationId,
-              aiResponseId: aiResponse.id,
-              url: c.url,
-              domain: c.domain,
-              citationOrder: c.order,
-              anchorText: c.anchorText,
-            })),
-          });
-        }
-
-        // Store AI Usage Record
-        await prisma.aIUsageRecord.create({
-          data: {
-            organizationId,
-            projectId,
-            trackingRunId: trackingRun.id,
-            promptRunId: promptRun.id,
-            provider,
-            model,
-            inputTokens: inTokens,
-            outputTokens: outTokens,
-            estimatedCostPaise: costPaise,
-            actualCostPaise: costPaise,
-            isEstimated: dryRun,
-          },
-        });
-
-        // Update prompt lastRunAt
-        await prisma.trackedPrompt.update({
-          where: { id: prompt.id },
-          data: { lastRunAt: executedAt },
-        });
-      } else {
-        // Run returned an error status from provider
-        failedCount++;
+      } catch (err: any) {
         await prisma.promptRun.create({
           data: {
             organizationId,
@@ -306,83 +403,127 @@ export async function startTrackingRun(options: TrackingRunOptions) {
             provider,
             modelVersion: model,
             status: 'FAILED',
-            latencyMs: result.latencyMs,
-            errorCode: result.errorCode || 'PROVIDER_ERROR',
-            errorMessage: result.errorMessage || 'Failed to generate response',
+            errorCode: err?.name || 'EXECUTION_EXCEPTION',
+            errorMessage: err?.message || 'Unexpected exception during execution',
             executedAt,
           },
         });
+        return { success: false, inputTokens: 0, outputTokens: 0, costPaise: 0 };
       }
-    } catch (err: any) {
-      failedCount++;
-      await prisma.promptRun.create({
-        data: {
-          organizationId,
-          projectId,
-          promptId: prompt.id,
-          trackingRunId: trackingRun.id,
-          provider,
-          modelVersion: model,
-          status: 'FAILED',
-          errorCode: err?.name || 'EXECUTION_EXCEPTION',
-          errorMessage: err?.message || 'Unexpected exception during execution',
-          executedAt,
-        },
-      });
+    });
+
+    // Aggregate stats
+    let successCount = 0;
+    let failedCount = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let totalActualCostPaise = 0;
+
+    for (const r of executionResults) {
+      if (r.success) {
+        successCount++;
+        totalInputTokens += r.inputTokens;
+        totalOutputTokens += r.outputTokens;
+        totalActualCostPaise += r.costPaise;
+      } else {
+        failedCount++;
+      }
     }
-  }
 
-  // 7. Update TrackingRun status
-  let finalStatus = 'COMPLETED';
-  if (failedCount > 0 && successCount > 0) {
-    finalStatus = 'PARTIALLY_COMPLETED';
-  } else if (failedCount > 0 && successCount === 0) {
-    finalStatus = 'FAILED';
-  }
+    // Determine final status
+    let finalStatus = 'COMPLETED';
+    if (failedCount > 0 && successCount > 0) {
+      finalStatus = 'PARTIALLY_COMPLETED';
+    } else if (failedCount > 0 && successCount === 0) {
+      finalStatus = 'FAILED';
+    }
 
-  const completedAt = new Date();
-  const updatedRun = await prisma.trackingRun.update({
-    where: { id: trackingRun.id },
-    data: {
-      status: finalStatus,
-      successCount,
-      failedCount,
-      totalInputTokens,
-      totalOutputTokens,
-      actualCostPaise: totalActualCostPaise,
-      completedAt,
-    },
-    include: {
-      promptRuns: {
-        include: {
-          prompt: { select: { promptText: true, category: true } },
-          aiResponse: {
-            include: {
-              mentions: true,
-              citations: true,
+    const completedAt = new Date();
+    const updatedRun = await prisma.trackingRun.update({
+      where: { id: trackingRun.id },
+      data: {
+        status: finalStatus,
+        successCount,
+        failedCount,
+        totalInputTokens,
+        totalOutputTokens,
+        actualCostPaise: totalActualCostPaise,
+        completedAt,
+      },
+      include: {
+        promptRuns: {
+          include: {
+            prompt: { select: { promptText: true, category: true } },
+            aiResponse: {
+              include: {
+                mentions: true,
+                citations: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    });
 
-  // 8. Generate Automated Recommendations based on run data
-  try {
-    await generateRecommendationsForRun(organizationId, projectId, trackingRun.id);
-  } catch {
-    // Non-blocking recommendation generation
+    // Generate automated recommendations based on run data
+    try {
+      await generateRecommendationsForRun(organizationId, projectId, trackingRun.id);
+    } catch {
+      // Non-blocking recommendation generation
+    }
+
+    return {
+      ...updatedRun,
+      summary: {
+        totalPrompts: updatedRun.promptCount,
+        successCount: updatedRun.successCount,
+        failedCount: updatedRun.failedCount,
+        status: updatedRun.status,
+      },
+    };
+  } catch (unexpectedError: any) {
+    console.error(`[TrackingPipeline] Fatal unexpected error in run ${trackingRun.id}:`, unexpectedError);
+    try {
+      await prisma.trackingRun.update({
+        where: { id: trackingRun.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: unexpectedError?.message || 'Unexpected failure during pipeline execution',
+          completedAt: new Date(),
+        },
+      });
+    } catch (dbErr) {
+      console.error(`[TrackingPipeline] Failed to mark run ${trackingRun.id} as FAILED:`, dbErr);
+    }
+    throw unexpectedError;
   }
+}
 
-  return updatedRun;
+export async function startTrackingRun(options: TrackingRunOptions) {
+  const { executeRun } = await initTrackingRun(options);
+  return await executeRun();
 }
 
 export async function getTrackingRuns(
   organizationId: string,
   projectId: string,
-  page = 1,
-  limit = 20
+  pageOrLimit: number = 1,
+  limitParam?: number
 ) {
+  let page = 1;
+  let limit = 20;
+
+  if (limitParam !== undefined) {
+    page = pageOrLimit;
+    limit = limitParam;
+  } else if (pageOrLimit > 10) {
+    // Called like getTrackingRuns(orgId, projId, 30)
+    limit = pageOrLimit;
+    page = 1;
+  } else {
+    page = pageOrLimit;
+  }
+
   const skip = (page - 1) * limit;
 
   const [runs, totalCount] = await Promise.all([

@@ -1,14 +1,16 @@
 // POST /api/v1/tracking/start
 // Reference: docs/API_CONTRACT.md & docs/TECHNICAL_BLUEPRINT.md
 
-import { NextRequest } from 'next/server';
+import { NextRequest, after } from 'next/server';
 import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
 } from '@/lib/api-handler';
-import { startTrackingRun } from '@/domain/ai-visibility/collection-engine';
+import { initTrackingRun } from '@/domain/ai-visibility/collection-engine';
 import { StartTrackingRunSchema } from '@/shared/validation/index';
+
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,7 +33,7 @@ export async function POST(request: NextRequest) {
 
     const validated = StartTrackingRunSchema.parse(body);
 
-    const result = await startTrackingRun({
+    const { trackingRun, executeRun } = await initTrackingRun({
       organizationId: orgId,
       projectId,
       brandId: validated.brandId || body.brandId,
@@ -41,9 +43,32 @@ export async function POST(request: NextRequest) {
       provider: validated.provider,
       model: validated.model,
       enableGrounding: validated.enableGrounding,
+      dryRun: validated.dryRun,
     });
 
-    return formatSuccessResponse(result, 201);
+    // Schedule background prompt execution after sending HTTP 201 response immediately
+    after(async () => {
+      try {
+        await executeRun();
+      } catch (bgError) {
+        console.error('[TrackingPipeline] Background execution failed:', bgError);
+      }
+    });
+
+    return formatSuccessResponse(
+      {
+        ...trackingRun,
+        trackingRunId: trackingRun.id,
+        summary: {
+          totalPrompts: trackingRun.promptCount,
+          successCount: 0,
+          failedCount: 0,
+          status: 'RUNNING',
+        },
+        message: 'Tracking run initialized and evaluating in background',
+      },
+      201
+    );
   } catch (err) {
     return formatErrorResponse(err);
   }

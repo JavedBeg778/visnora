@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
-    const runs = await getTrackingRuns(orgId, projectId, limit);
+    const runs = await getTrackingRuns(orgId, projectId, 1, limit);
     return formatSuccessResponse(runs);
   } catch (err) {
     return formatErrorResponse(err);

@@ -42,7 +42,9 @@ export function RunDetailsClient({ initialRun, organizationId }: RunDetailsClien
       });
       const json = await res.json();
       if (json.success) {
-        setMessage(`Retry finished! Success: ${json.data.summary.successCount}, Failed: ${json.data.summary.failedCount}`);
+        const sCount = json.data.summary?.successCount ?? json.data.successCount ?? 0;
+        const fCount = json.data.summary?.failedCount ?? json.data.failedCount ?? 0;
+        setMessage(`Retry finished! Success: ${sCount}, Failed: ${fCount}`);
         // Refresh run details
         const refreshed = await fetch(`/api/v1/tracking/runs/${run.id}`, {
           headers: { 'x-organization-id': organizationId },

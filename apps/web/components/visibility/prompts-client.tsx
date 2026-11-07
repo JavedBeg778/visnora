@@ -250,7 +250,8 @@ export function PromptsClient({
       });
       const json = await res.json();
       if (json.success) {
-        setMessage(`Tracking analysis completed! Evaluated ${json.data.summary.successCount} prompt query sample(s).`);
+        const totalPrompts = json.data.promptCount || json.data.summary?.totalPrompts || (promptIdsToRun ? promptIdsToRun.length : 10);
+        setMessage(`Tracking analysis initiated! Evaluating ${totalPrompts} prompt query sample(s) in background.`);
         await refreshPrompts(selectedProjectId);
       } else {
         setMessage(`Notice: ${json.error?.message || 'Run incomplete'}`);

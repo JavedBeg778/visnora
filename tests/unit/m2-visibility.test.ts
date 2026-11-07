@@ -289,5 +289,17 @@ describe('Milestone M2 — AI Visibility MVP Unit & Domain Tests', () => {
       const weekly = computeNextRunAt('WEEKLY', base);
       expect(weekly.toISOString()).toBe('2026-06-08T10:00:00.000Z');
     });
+
+    it('validates StartTrackingRunSchema with dryRun and defaults', () => {
+      const parsed = StartTrackingRunSchema.parse({
+        projectId: '00000000-0000-0000-0000-000000000001',
+        dryRun: true,
+      });
+
+      expect(parsed.provider).toBe('google-gemini');
+      expect(parsed.model).toBe('gemini-3.8-flash');
+      expect(parsed.enableGrounding).toBe(false);
+      expect(parsed.dryRun).toBe(true);
+    });
   });
 });

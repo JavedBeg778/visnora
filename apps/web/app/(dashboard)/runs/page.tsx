@@ -54,7 +54,7 @@ export default async function RunsPage() {
 
   let runs: any[] = [];
   try {
-    const data = await getTrackingRuns(currentOrg.id, currentProject.id, 30);
+    const data = await getTrackingRuns(currentOrg.id, currentProject.id, 1, 30);
     runs = data.runs;
   } catch {
     // Fallback

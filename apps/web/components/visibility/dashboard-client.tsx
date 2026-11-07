@@ -13,6 +13,7 @@ import {
   Info,
   Calendar,
   AlertCircle,
+  AlertTriangle,
   CheckCircle2,
   ExternalLink,
   ChevronRight,
@@ -73,14 +74,20 @@ export function DashboardClient({
   const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
   const [runMessage, setRunMessage] = useState<string | null>(null);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [runStatusType, setRunStatusType] = useState<'info' | 'success' | 'error' | null>(null);
 
   // Quick Tracking Run Trigger
   const handleTriggerRun = async () => {
     if (!selectedProjectId) return;
     setRunning(true);
     setRunMessage(null);
+    setRunStatusType('info');
+
+    const activeBrand = brands.find((b) => b.id === selectedBrandId) || defaultBrand;
+    const brandName = activeBrand?.canonicalName || 'Active Brand';
+
     try {
-      const activeBrand = brands.find((b) => b.id === selectedBrandId) || defaultBrand;
       const res = await fetch('/api/v1/tracking/start', {
         method: 'POST',
         headers: {
@@ -96,16 +103,65 @@ export function DashboardClient({
         }),
       });
       const json = await res.json();
+
       if (json.success) {
-        setRunMessage(`Tracking analysis complete! Evaluated ${json.data.summary.successCount} prompt query sample(s).`);
-        await refreshData(selectedProjectId, selectedBrandId, days);
+        const runId = json.data.id || json.data.trackingRunId;
+        const totalPrompts = json.data.promptCount || json.data.summary?.totalPrompts || 10;
+        setActiveRunId(runId);
+        setRunStatusType('info');
+        setRunMessage(`Tracking pipeline started for ${brandName}! Evaluating ${totalPrompts} prompt query sample(s) in background.`);
+
+        // Non-blocking status polling while background worker executes prompts
+        if (runId) {
+          let attempts = 0;
+          const maxAttempts = 24; // 24 * 2.5s = 60s
+          const pollInterval = setInterval(async () => {
+            attempts++;
+            try {
+              const runRes = await fetch(`/api/v1/tracking/runs/${runId}`, {
+                headers: { 'x-organization-id': organizationId },
+              });
+              const runJson = await runRes.json();
+              if (runJson.success && runJson.data) {
+                const r = runJson.data;
+                if (r.status === 'COMPLETED' || r.status === 'PARTIALLY_COMPLETED' || r.status === 'PARTIAL' || r.status === 'FAILED') {
+                  clearInterval(pollInterval);
+                  setRunning(false);
+                  if (r.status === 'FAILED') {
+                    setRunStatusType('error');
+                    setRunMessage(`Tracking pipeline finished with errors (${r.failedCount} failed). Check run details.`);
+                  } else {
+                    setRunStatusType('success');
+                    setRunMessage(
+                      `Tracking pipeline complete! Successfully evaluated ${r.successCount}/${r.promptCount} prompt query sample(s).`
+                    );
+                    await refreshData(selectedProjectId, selectedBrandId, days);
+                  }
+                }
+              }
+            } catch {
+              // Ignore transient poll error
+            }
+
+            if (attempts >= maxAttempts) {
+              clearInterval(pollInterval);
+              setRunning(false);
+              setRunStatusType('info');
+              setRunMessage('Tracking run is continuing in background. You can inspect progress on the Runs page.');
+            }
+          }, 2500);
+        } else {
+          setRunning(false);
+        }
       } else {
+        setRunning(false);
+        setRunStatusType('error');
         setRunMessage(`Run notice: ${json.error?.message || 'Could not complete tracking run'}`);
       }
     } catch (err: any) {
-      setRunMessage(`Error: ${err.message || 'Run execution failed'}`);
-    } finally {
       setRunning(false);
+      setRunStatusType('error');
+      setRunMessage(`Error: ${err.message || 'Run execution failed'}`);
     }
   };
 
@@ -284,9 +340,34 @@ export function DashboardClient({
       </div>
 
       {runMessage && (
-        <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs font-medium text-emerald-800 flex items-center space-x-2.5 animate-in fade-in duration-200">
-          <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
-          <span>{runMessage}</span>
+        <div
+          className={`p-3.5 rounded-xl border text-xs font-medium flex items-center justify-between gap-3 animate-in fade-in duration-200 ${
+            runStatusType === 'error'
+              ? 'bg-rose-50 border-rose-200 text-rose-800'
+              : runStatusType === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-blue-50 border-blue-200 text-blue-800'
+          }`}
+        >
+          <div className="flex items-center space-x-2.5">
+            {runStatusType === 'error' ? (
+              <AlertTriangle className="h-4 w-4 text-rose-600 flex-shrink-0" />
+            ) : runStatusType === 'success' ? (
+              <CheckCircle2 className="h-4 w-4 text-emerald-600 flex-shrink-0" />
+            ) : (
+              <RotateCw className="h-4 w-4 text-blue-600 flex-shrink-0 animate-spin" />
+            )}
+            <span>{runMessage}</span>
+          </div>
+          {activeRunId && (
+            <Link
+              href={`/runs/${activeRunId}`}
+              className="text-xs font-bold underline flex items-center space-x-1 hover:opacity-80 flex-shrink-0"
+            >
+              <span>View Tracking Run</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
         </div>
       )}
 

@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
     const result = await startTrackingRun({
       organizationId: orgId,
       projectId,
+      brandId: validated.brandId || body.brandId,
       userId: user.id,
       promptIds: validated.promptIds,
       groupId: validated.groupId,

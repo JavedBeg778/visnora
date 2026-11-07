@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const orgId = request.headers.get('x-organization-id') || searchParams.get('orgId');
     const projectId = searchParams.get('projectId');
+    const brandId = searchParams.get('brandId') || undefined;
     const days = parseInt(searchParams.get('days') || '30', 10);
 
     if (!orgId) {
@@ -29,7 +30,7 @@ export async function GET(request: NextRequest) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
-    const trends = await getHistoricalTrends(orgId, projectId, days);
+    const trends = await getHistoricalTrends(orgId, projectId, days, brandId);
     return formatSuccessResponse(trends);
   } catch (err) {
     return formatErrorResponse(err);

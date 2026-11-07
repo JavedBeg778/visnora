@@ -66,26 +66,31 @@ export default function SettingsPage() {
       const match = document.cookie.match(/visnora_active_org=([^;]+)/);
       const activeOrgId = match ? match[1] : '';
 
-      // 1. Fetch Organization Details
-      if (activeOrgId) {
-        const orgRes = await fetch(`/api/v1/organizations/${activeOrgId}`);
-        const orgData = await orgRes.json();
-        if (orgRes.ok && orgData.success && orgData.data) {
-          const org = orgData.data;
-          setOrgId(org.id);
-          setOrgName(org.name || '');
-          setOrgWebsite(org.website || '');
-          setOrgType(org.orgType || 'business');
-          setBillingEmail(org.billingEmail || '');
-          setCountryCode(org.countryCode || 'IN');
-          setUserRole(org.role || 'MEMBER');
-        }
+      // Fetch Organization and Profile in parallel
+      const orgPromise = activeOrgId
+        ? fetch(`/api/v1/organizations/${activeOrgId}`)
+            .then(async (r) => (r.ok ? r.json() : null))
+            .catch(() => null)
+        : Promise.resolve(null);
+
+      const profPromise = fetch('/api/v1/users/me')
+        .then(async (r) => (r.ok ? r.json() : null))
+        .catch(() => null);
+
+      const [orgData, profData] = await Promise.all([orgPromise, profPromise]);
+
+      if (orgData && orgData.success && orgData.data) {
+        const org = orgData.data;
+        setOrgId(org.id);
+        setOrgName(org.name || '');
+        setOrgWebsite(org.website || '');
+        setOrgType(org.orgType || 'business');
+        setBillingEmail(org.billingEmail || '');
+        setCountryCode(org.countryCode || 'IN');
+        setUserRole(org.role || 'MEMBER');
       }
 
-      // 2. Fetch User Profile
-      const profRes = await fetch('/api/v1/users/me');
-      const profData = await profRes.json();
-      if (profRes.ok && profData.success && profData.data) {
+      if (profData && profData.success && profData.data) {
         const profile = profData.data;
         setFullName(profile.fullName || '');
         setUserEmail(profile.email || '');

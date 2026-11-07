@@ -56,7 +56,8 @@ export function calculateAiVisibilityScore(params: {
 export async function getProjectVisibilityOverview(
   organizationId: string,
   projectId: string,
-  dateRangeDays = 30
+  dateRangeDays = 30,
+  brandId?: string
 ) {
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - dateRangeDays);
@@ -134,8 +135,12 @@ export async function getProjectVisibilityOverview(
   for (const run of runs) {
     if (!run.aiResponse) continue;
 
-    const brandMentions = run.aiResponse.mentions.filter((m) => m.mentionType === 'PRIMARY_BRAND');
-    const compMentions = run.aiResponse.mentions.filter((m) => m.mentionType === 'COMPETITOR');
+    const brandMentions = brandId
+      ? run.aiResponse.mentions.filter((m) => m.matchedEntityId === brandId || (m.mentionType === 'PRIMARY_BRAND' && !m.matchedEntityId))
+      : run.aiResponse.mentions.filter((m) => m.mentionType === 'PRIMARY_BRAND');
+    const compMentions = brandId
+      ? run.aiResponse.mentions.filter((m) => m.matchedEntityId !== brandId)
+      : run.aiResponse.mentions.filter((m) => m.mentionType === 'COMPETITOR');
     const citations = run.aiResponse.citations;
 
     if (brandMentions.length > 0) {
@@ -222,14 +227,16 @@ export async function getProjectVisibilityOverview(
 export async function getCompetitorComparison(
   organizationId: string,
   projectId: string,
-  dateRangeDays = 30
+  dateRangeDays = 30,
+  brandId?: string
 ) {
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - dateRangeDays);
 
-  const brand = await prisma.brand.findFirst({
-    where: { projectId, organizationId, isPrimary: true },
-  });
+  const brand = brandId
+    ? await prisma.brand.findFirst({ where: { id: brandId, organizationId } })
+    : (await prisma.brand.findFirst({ where: { projectId, organizationId, isPrimary: true } })) ||
+      (await prisma.brand.findFirst({ where: { projectId, organizationId } }));
 
   const competitors = await prisma.competitor.findMany({
     where: { projectId, organizationId, isArchived: false },
@@ -305,11 +312,15 @@ export async function getCompetitorComparison(
     const compsSeenInRun = new Set<string>();
 
     for (const mention of run.aiResponse.mentions) {
-      if (mention.mentionType === 'PRIMARY_BRAND') {
+      const isTarget = brandId
+        ? mention.matchedEntityId === brandId || (mention.mentionType === 'PRIMARY_BRAND' && !mention.matchedEntityId)
+        : mention.mentionType === 'PRIMARY_BRAND';
+
+      if (isTarget) {
         runHasPrimary = true;
         primaryTotalMentions++;
         if (mention.listPosition !== null) primaryPositions.push(mention.listPosition);
-      } else if (mention.mentionType === 'COMPETITOR') {
+      } else if (mention.mentionType === 'COMPETITOR' || (brandId && mention.matchedEntityId !== brandId)) {
         const stat = compStats.get(mention.matchedEntityId);
         if (stat) {
           stat.mentionsCount++;
@@ -434,7 +445,8 @@ export async function getCitationIntelligence(
 export async function getHistoricalTrends(
   organizationId: string,
   projectId: string,
-  dateRangeDays = 30
+  dateRangeDays = 30,
+  brandId?: string
 ) {
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - dateRangeDays);
@@ -475,8 +487,15 @@ export async function getHistoricalTrends(
     existing.runsCount++;
 
     if (run.aiResponse) {
-      existing.brandMentions += run.aiResponse.mentions.filter((m) => m.mentionType === 'PRIMARY_BRAND').length;
-      existing.compMentions += run.aiResponse.mentions.filter((m) => m.mentionType === 'COMPETITOR').length;
+      const bMentions = brandId
+        ? run.aiResponse.mentions.filter((m) => m.matchedEntityId === brandId || (m.mentionType === 'PRIMARY_BRAND' && !m.matchedEntityId)).length
+        : run.aiResponse.mentions.filter((m) => m.mentionType === 'PRIMARY_BRAND').length;
+      const cMentions = brandId
+        ? run.aiResponse.mentions.filter((m) => m.matchedEntityId !== brandId).length
+        : run.aiResponse.mentions.filter((m) => m.mentionType === 'COMPETITOR').length;
+
+      existing.brandMentions += bMentions;
+      existing.compMentions += cMentions;
       existing.citationsCount += run.aiResponse.citations.length;
     }
 

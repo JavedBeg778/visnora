@@ -1,8 +1,7 @@
 import React from 'react';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { createClient } from '../../lib/supabase/server';
-import { getOrganizationsForUser } from '@/domain/organizations/service';
+import { getCurrentUser, getCachedOrganizations } from '@/lib/server-cache';
 import { syncUserProfile } from '@/domain/administration/user-service';
 import { DashboardShell } from '../../components/dashboard/dashboard-shell';
 
@@ -11,9 +10,7 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
-  const { data } = await supabase.auth.getUser();
-  const user = data?.user;
+  const user = await getCurrentUser();
 
   // Strict Server Component route protection: redirect unauthenticated visitors to login
   if (!user) {
@@ -27,25 +24,18 @@ export default async function DashboardLayout({
     userEmail.split('@')[0] ||
     'Visnora User';
 
-  // Ensure user profile exists in database
-  try {
-    await syncUserProfile({
-      id: userId,
-      email: userEmail,
-      fullName: userFullName,
-      avatarUrl: user.user_metadata?.avatar_url,
-    });
-  } catch (err) {
+  // Non-blocking sync to avoid delaying initial layout render
+  syncUserProfile({
+    id: userId,
+    email: userEmail,
+    fullName: userFullName,
+    avatarUrl: user.user_metadata?.avatar_url,
+  }).catch((err) => {
     console.error('Failed to sync user profile in layout:', err);
-  }
+  });
 
-  // Retrieve user organizations
-  let userOrgs: any[] = [];
-  try {
-    userOrgs = await getOrganizationsForUser(userId);
-  } catch (err) {
-    console.error('Failed to load user organizations:', err);
-  }
+  // Retrieve user organizations with request-scoped caching
+  const userOrgs = await getCachedOrganizations(userId);
 
   // If authenticated user has no organizations yet, redirect to onboarding flow
   if (userOrgs.length === 0) {

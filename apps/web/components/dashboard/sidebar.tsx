@@ -119,6 +119,7 @@ export function Sidebar({
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={true}
                   onClick={onClose}
                   className={cn(
                     'group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all relative',
@@ -162,6 +163,7 @@ export function Sidebar({
                 <Link
                   key={item.name}
                   href={item.href}
+                  prefetch={true}
                   onClick={onClose}
                   className={cn(
                     'group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all relative',

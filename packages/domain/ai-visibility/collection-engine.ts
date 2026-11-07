@@ -13,6 +13,7 @@ import { BrandEntity } from './types';
 export interface TrackingRunOptions {
   organizationId: string;
   projectId: string;
+  brandId?: string;
   userId: string;
   promptIds?: string[];
   groupId?: string;
@@ -62,7 +63,7 @@ export function estimateTrackingRunCost(
 }
 
 export async function startTrackingRun(options: TrackingRunOptions) {
-  const { organizationId, projectId, promptIds, groupId, enableGrounding = false, dryRun = false } = options;
+  const { organizationId, projectId, brandId, promptIds, groupId, enableGrounding = false, dryRun = false } = options;
   const provider = options.provider || 'google-gemini';
   const model = options.model || (provider === 'google-gemini' ? 'gemini-3.8-flash' : 'gpt-4o');
 
@@ -79,16 +80,22 @@ export async function startTrackingRun(options: TrackingRunOptions) {
     throw new NotFoundError('Project container not found');
   }
 
-  const primaryBrand = project.brands.find((b) => b.isPrimary) || project.brands[0];
-  if (!primaryBrand) {
+  let targetBrand = null;
+  if (brandId) {
+    targetBrand = project.brands.find((b) => b.id === brandId);
+  }
+  if (!targetBrand) {
+    targetBrand = project.brands.find((b) => b.isPrimary) || project.brands[0];
+  }
+  if (!targetBrand) {
     throw new ValidationError('A primary brand must be configured for this project before running tracking.');
   }
 
   const targetBrandEntity: BrandEntity = {
-    id: primaryBrand.id,
-    canonicalName: primaryBrand.canonicalName,
-    domain: primaryBrand.domain,
-    aliases: primaryBrand.aliases || [],
+    id: targetBrand.id,
+    canonicalName: targetBrand.canonicalName,
+    domain: targetBrand.domain,
+    aliases: targetBrand.aliases || [],
   };
 
   const competitorEntities: BrandEntity[] = project.competitors.map((c) => ({

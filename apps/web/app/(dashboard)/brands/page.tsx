@@ -1,30 +1,20 @@
 import React from 'react';
 import { cookies } from 'next/headers';
 import Link from 'next/link';
-import { createClient } from '../../../lib/supabase/server';
-import { getOrganizationsForUser } from '../../../../../packages/domain/organizations/service';
-import { getProjects } from '../../../../../packages/domain/projects/service';
-import { getBrands } from '../../../../../packages/domain/ai-visibility/brand-service';
-import { BrandsClient } from '../../../components/visibility/brands-client';
-import { Button } from '../../../components/ui/button';
+import {
+  getCurrentUser,
+  getCachedOrganizations,
+  getCachedProjects,
+  getCachedBrands,
+} from '@/lib/server-cache';
+import { BrandsClient } from '@/components/visibility/brands-client';
+import { Button } from '@/components/ui/button';
 
 export default async function BrandsPage() {
-  let userId = '00000000-0000-0000-0000-000000000001';
+  const user = await getCurrentUser();
+  const userId = user?.id || '00000000-0000-0000-0000-000000000001';
 
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) userId = data.user.id;
-  } catch {
-    // Dev fallback
-  }
-
-  let userOrgs: any[] = [];
-  try {
-    userOrgs = await getOrganizationsForUser(userId);
-  } catch {
-    // Fallback
-  }
+  const userOrgs = await getCachedOrganizations(userId);
 
   const cookieStore = await cookies();
   const activeOrgCookie = cookieStore.get('visnora_active_org')?.value;
@@ -33,14 +23,10 @@ export default async function BrandsPage() {
     name: 'Primary Organization',
   };
 
-  let projects: any[] = [];
-  if (currentOrg.id !== 'demo-org') {
-    try {
-      projects = await getProjects(currentOrg.id, undefined, userId);
-    } catch {
-      // Fallback
-    }
-  }
+  const [projects, allBrands] = await Promise.all([
+    getCachedProjects(currentOrg.id, userId),
+    getCachedBrands(currentOrg.id),
+  ]);
 
   if (projects.length === 0) {
     return (
@@ -56,13 +42,18 @@ export default async function BrandsPage() {
     );
   }
 
-  const currentProject = projects[0];
-  let brands: any[] = [];
-  try {
-    brands = await getBrands(currentOrg.id, currentProject.id);
-  } catch {
-    // Fallback
-  }
+  const activeBrandCookie = cookieStore.get('visnora_active_brand')?.value;
+  const activeBrand =
+    (activeBrandCookie && allBrands.find((b) => b.id === activeBrandCookie)) ||
+    allBrands.find((b) => b.isPrimary && b.canonicalName !== 'Demo Brand') ||
+    allBrands.find((b) => b.isPrimary) ||
+    allBrands[0];
+
+  const currentProject =
+    (activeBrand && projects.find((p) => p.id === activeBrand.projectId)) ||
+    projects[0];
+
+  const projectBrands = allBrands.filter((b) => b.projectId === currentProject.id);
 
   return (
     <div className="space-y-6">
@@ -74,7 +65,7 @@ export default async function BrandsPage() {
       </div>
 
       <BrandsClient
-        initialBrands={brands}
+        initialBrands={projectBrands}
         projects={projects}
         currentProjectId={currentProject.id}
         organizationId={currentOrg.id}
@@ -82,4 +73,3 @@ export default async function BrandsPage() {
     </div>
   );
 }
-

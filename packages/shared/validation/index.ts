@@ -156,6 +156,8 @@ export const CreatePromptGroupSchema = z.object({
 });
 
 export const StartTrackingRunSchema = z.object({
+  projectId: z.string().uuid().optional(),
+  brandId: z.string().uuid().optional(),
   promptIds: z.array(z.string().uuid()).optional(),
   groupId: z.string().uuid().optional(),
   provider: z.enum(['google-gemini', 'openai']).default('google-gemini'),

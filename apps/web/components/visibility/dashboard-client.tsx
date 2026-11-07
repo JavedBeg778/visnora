@@ -34,10 +34,13 @@ import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/card';
 import { EmptyState } from '../ui/empty-state';
+import { formatBrandWebsite } from '../../lib/brand-utils';
 
 interface DashboardClientProps {
   initialOverview: any;
   initialTrends: any[];
+  brands?: any[];
+  initialBrandId?: string;
   projects: any[];
   currentProjectId: string;
   organizationId: string;
@@ -46,11 +49,24 @@ interface DashboardClientProps {
 export function DashboardClient({
   initialOverview,
   initialTrends,
+  brands = [],
+  initialBrandId,
   projects,
   currentProjectId: initialProjectId,
   organizationId,
 }: DashboardClientProps) {
-  const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
+  // Resolve default brand: prioritize initialBrandId, then primary brand (avoiding Demo Brand if another brand exists), then first
+  const defaultBrand =
+    (initialBrandId && brands.find((b) => b.id === initialBrandId)) ||
+    brands.find((b) => b.isPrimary && b.canonicalName !== 'Demo Brand') ||
+    brands.find((b) => b.isPrimary) ||
+    brands.find((b) => !b.domain.includes('example.com')) ||
+    brands[0];
+
+  const [selectedBrandId, setSelectedBrandId] = useState<string>(defaultBrand?.id || '');
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(
+    defaultBrand?.projectId || initialProjectId
+  );
   const [days, setDays] = useState(30);
   const [overview, setOverview] = useState(initialOverview);
   const [trends, setTrends] = useState(initialTrends);
@@ -64,6 +80,7 @@ export function DashboardClient({
     setRunning(true);
     setRunMessage(null);
     try {
+      const activeBrand = brands.find((b) => b.id === selectedBrandId) || defaultBrand;
       const res = await fetch('/api/v1/tracking/start', {
         method: 'POST',
         headers: {
@@ -72,6 +89,7 @@ export function DashboardClient({
         },
         body: JSON.stringify({
           projectId: selectedProjectId,
+          brandId: activeBrand?.id,
           provider: 'google-gemini',
           model: 'gemini-3.8-flash',
           enableGrounding: false,
@@ -80,7 +98,7 @@ export function DashboardClient({
       const json = await res.json();
       if (json.success) {
         setRunMessage(`Tracking analysis complete! Evaluated ${json.data.summary.successCount} prompt query sample(s).`);
-        await refreshData(selectedProjectId, days);
+        await refreshData(selectedProjectId, selectedBrandId, days);
       } else {
         setRunMessage(`Run notice: ${json.error?.message || 'Could not complete tracking run'}`);
       }
@@ -91,14 +109,15 @@ export function DashboardClient({
     }
   };
 
-  const refreshData = async (projId: string, dayRange: number) => {
+  const refreshData = async (projId: string, brandId: string, dayRange: number) => {
     setLoading(true);
     try {
+      const brandParam = brandId ? `&brandId=${encodeURIComponent(brandId)}` : '';
       const [overviewRes, trendsRes] = await Promise.all([
-        fetch(`/api/v1/analytics/visibility?projectId=${projId}&days=${dayRange}`, {
+        fetch(`/api/v1/analytics/visibility?projectId=${projId}${brandParam}&days=${dayRange}`, {
           headers: { 'x-organization-id': organizationId },
         }),
-        fetch(`/api/v1/analytics/trends?projectId=${projId}&days=${dayRange}`, {
+        fetch(`/api/v1/analytics/trends?projectId=${projId}${brandParam}&days=${dayRange}`, {
           headers: { 'x-organization-id': organizationId },
         }),
       ]);
@@ -113,15 +132,22 @@ export function DashboardClient({
     }
   };
 
-  const handleProjectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newId = e.target.value;
-    setSelectedProjectId(newId);
-    refreshData(newId, days);
+  const handleBrandChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newBrandId = e.target.value;
+    setSelectedBrandId(newBrandId);
+    // Persist active brand in cookie for 1 year
+    document.cookie = `visnora_active_brand=${newBrandId}; path=/; max-age=31536000; SameSite=Lax`;
+    const targetBrand = brands.find((b) => b.id === newBrandId);
+    const newProjId = targetBrand?.projectId || selectedProjectId;
+    if (newProjId !== selectedProjectId) {
+      setSelectedProjectId(newProjId);
+    }
+    refreshData(newProjId, newBrandId, days);
   };
 
   const handleDaysChange = (newDays: number) => {
     setDays(newDays);
-    refreshData(selectedProjectId, newDays);
+    refreshData(selectedProjectId, selectedBrandId, newDays);
   };
 
   const score = overview?.visibilityScore || {
@@ -150,6 +176,7 @@ export function DashboardClient({
     mixed: 0,
   };
 
+  const currentBrand = brands.find((b) => b.id === selectedBrandId) || defaultBrand;
   const currentProject = projects.find((p) => p.id === selectedProjectId) || projects[0];
 
   return (
@@ -168,29 +195,57 @@ export function DashboardClient({
       {/* Top Filter and Execution Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-subtle flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div className="flex flex-wrap items-center gap-3">
-          <label htmlFor="project-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+          <label htmlFor="brand-select" className="text-xs font-bold text-slate-500 uppercase tracking-wider">
             Active Brand:
           </label>
           <div className="relative">
-            <select
-              id="project-select"
-              value={selectedProjectId}
-              onChange={handleProjectChange}
-              className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-subtle"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({p.primaryWebsite})
-                </option>
-              ))}
-            </select>
+            {brands.length > 0 ? (
+              <select
+                id="brand-select"
+                value={selectedBrandId}
+                onChange={handleBrandChange}
+                className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-subtle cursor-pointer"
+              >
+                {brands.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.canonicalName} ({formatBrandWebsite(b.domain)})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                id="brand-select"
+                value={selectedProjectId}
+                onChange={(e) => {
+                  setSelectedProjectId(e.target.value);
+                  refreshData(e.target.value, '', days);
+                }}
+                className="text-xs font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded-xl px-3.5 py-2 pr-8 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors shadow-subtle cursor-pointer"
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.primaryWebsite})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {currentProject && (
-            <span className="hidden sm:inline-flex items-center text-xs text-slate-400">
-              <Globe2 className="h-3.5 w-3.5 mr-1" />
-              {currentProject.primaryWebsite}
+          {currentBrand && (
+            <span className="hidden sm:inline-flex items-center text-xs text-slate-500 font-medium">
+              <Globe2 className="h-3.5 w-3.5 mr-1 text-slate-400" />
+              {formatBrandWebsite(currentBrand.domain)}
             </span>
+          )}
+
+          {brands.length === 0 && (
+            <Link
+              href="/brands"
+              className="text-xs text-blue-600 hover:text-blue-700 font-medium inline-flex items-center ml-2"
+            >
+              Configure Brand Profiles
+              <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+            </Link>
           )}
         </div>
 

@@ -1,37 +1,25 @@
 import React from 'react';
 import Link from 'next/link';
 import { cookies } from 'next/headers';
-import { Plus, Sparkles, FolderKanban } from 'lucide-react';
-import { createClient } from '../../../lib/supabase/server';
-import { getOrganizationsForUser } from '../../../../../packages/domain/organizations/service';
-import { getProjects } from '../../../../../packages/domain/projects/service';
+import { Plus, Sparkles } from 'lucide-react';
+import {
+  getCurrentUser,
+  getCachedOrganizations,
+  getCachedProjects,
+  getCachedBrands,
+} from '@/lib/server-cache';
 import {
   getProjectVisibilityOverview,
   getHistoricalTrends,
-} from '../../../../../packages/domain/ai-visibility/analytics-service';
-import { DashboardClient } from '../../../components/visibility/dashboard-client';
-import { Button } from '../../../components/ui/button';
-import { EmptyState } from '../../../components/ui/empty-state';
+} from '@/domain/ai-visibility/analytics-service';
+import { DashboardClient } from '@/components/visibility/dashboard-client';
+import { Button } from '@/components/ui/button';
 
 export default async function DashboardPage() {
-  let userId = '00000000-0000-0000-0000-000000000001';
+  const user = await getCurrentUser();
+  const userId = user?.id || '00000000-0000-0000-0000-000000000001';
 
-  try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    if (data?.user) {
-      userId = data.user.id;
-    }
-  } catch {
-    // Local dev fallback
-  }
-
-  let userOrgs: any[] = [];
-  try {
-    userOrgs = await getOrganizationsForUser(userId);
-  } catch {
-    // DB fallback
-  }
+  const userOrgs = await getCachedOrganizations(userId);
 
   const cookieStore = await cookies();
   const activeOrgCookie = cookieStore.get('visnora_active_org')?.value;
@@ -41,14 +29,11 @@ export default async function DashboardPage() {
     role: 'OWNER',
   };
 
-  let projects: any[] = [];
-  if (currentOrg.id !== 'demo-org') {
-    try {
-      projects = await getProjects(currentOrg.id, undefined, userId);
-    } catch {
-      // DB fallback
-    }
-  }
+  // Fetch projects and all brand profiles in parallel
+  const [projects, allBrands] = await Promise.all([
+    getCachedProjects(currentOrg.id, userId),
+    getCachedBrands(currentOrg.id),
+  ]);
 
   // If no projects exist, show guided empty state
   if (projects.length === 0) {
@@ -90,16 +75,30 @@ export default async function DashboardPage() {
     );
   }
 
-  const currentProject = projects[0];
-  let overview = null;
-  let trends: any[] = [];
+  // Resolve active brand with priority:
+  // 1. Saved visnora_active_brand cookie
+  // 2. Real primary brand (not Demo Brand)
+  // 3. Primary brand
+  // 4. Real non-demo brand
+  // 5. First available brand
+  const activeBrandCookie = cookieStore.get('visnora_active_brand')?.value;
+  const activeBrand =
+    (activeBrandCookie && allBrands.find((b) => b.id === activeBrandCookie)) ||
+    allBrands.find((b) => b.isPrimary && b.canonicalName !== 'Demo Brand') ||
+    allBrands.find((b) => b.isPrimary) ||
+    allBrands.find((b) => !b.domain.includes('example.com')) ||
+    allBrands[0];
 
-  try {
-    overview = await getProjectVisibilityOverview(currentOrg.id, currentProject.id, 30);
-    trends = await getHistoricalTrends(currentOrg.id, currentProject.id, 30);
-  } catch (err) {
-    // Fallback if data is empty
-  }
+  // Map active project from selected brand or default to first project
+  const currentProject =
+    (activeBrand && projects.find((p) => p.id === activeBrand.projectId)) ||
+    projects[0];
+
+  // Fetch overview and historical trends in parallel
+  const [overview, trends] = await Promise.all([
+    getProjectVisibilityOverview(currentOrg.id, currentProject.id, 30, activeBrand?.id).catch(() => null),
+    getHistoricalTrends(currentOrg.id, currentProject.id, 30, activeBrand?.id).catch(() => []),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -115,6 +114,8 @@ export default async function DashboardPage() {
       <DashboardClient
         initialOverview={overview}
         initialTrends={trends}
+        brands={allBrands}
+        initialBrandId={activeBrand?.id}
         projects={projects}
         currentProjectId={currentProject.id}
         organizationId={currentOrg.id}

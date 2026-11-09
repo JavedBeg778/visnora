@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
 
     const validated = StartTrackingRunSchema.parse(body);
     const requestedBrandId = validated.brandId || body.brandId || undefined;
-    await assertProjectAccess(orgId, projectId, user.id, requestedBrandId);
+    await assertProjectAccess(orgId, projectId, user.id, requestedBrandId, 'ANALYST');
 
     const { trackingRun, executeRun } = await initTrackingRun({
       organizationId: orgId,

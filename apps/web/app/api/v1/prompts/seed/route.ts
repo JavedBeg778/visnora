@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
-    await assertProjectAccess(orgId, projectId, user.id);
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'MEMBER');
     const seeded = await seedDefaultPromptsFromDataset(orgId, projectId, count);
     return formatSuccessResponse(seeded, 201);
   } catch (err) {

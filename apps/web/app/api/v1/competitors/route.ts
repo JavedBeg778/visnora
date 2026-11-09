@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = CreateCompetitorSchema.parse(body);
-    await assertProjectAccess(orgId, projectId, user.id);
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'MEMBER');
     const competitor = await createCompetitor(orgId, projectId, validated);
 
     return formatSuccessResponse(competitor, 201);

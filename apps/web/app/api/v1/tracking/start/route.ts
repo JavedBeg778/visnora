@@ -6,6 +6,7 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertProjectAccess,
 } from '@/lib/api-handler';
 import { initTrackingRun } from '@/domain/ai-visibility/collection-engine';
 import { StartTrackingRunSchema } from '@/shared/validation/index';
@@ -32,11 +33,13 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = StartTrackingRunSchema.parse(body);
+    const requestedBrandId = validated.brandId || body.brandId || undefined;
+    await assertProjectAccess(orgId, projectId, user.id, requestedBrandId);
 
     const { trackingRun, executeRun } = await initTrackingRun({
       organizationId: orgId,
       projectId,
-      brandId: validated.brandId || body.brandId,
+      brandId: requestedBrandId,
       userId: user.id,
       promptIds: validated.promptIds,
       groupId: validated.groupId,

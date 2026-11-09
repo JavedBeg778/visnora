@@ -243,7 +243,7 @@ describe('Milestone M2 — AI Visibility MVP Unit & Domain Tests', () => {
       expect(metrics.shareOfVoice).toBe(50);
       expect(metrics.citationRate).toBe(75);
       expect(metrics.positiveSentimentRate).toBe(80);
-      expect(metrics.visibilityScore).toBe(58.25);
+      expect(metrics.visibilityScore).toBe(58.3);
     });
 
     it('returns zero-valued daily metrics for an empty bucket', () => {

@@ -124,11 +124,9 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Authen
  * Validates that the authenticated user is an active member of the requested
  * organization and that the project (and optional brand) belong to that tenant.
  */
-export async function assertProjectAccess(
+export async function assertOrganizationAccess(
   organizationId: string,
-  projectId: string,
-  userId: string,
-  brandId?: string
+  userId: string
 ): Promise<void> {
   const membership = await prisma.organizationMember.findUnique({
     where: { uq_org_user: { organizationId, userId } },
@@ -138,6 +136,15 @@ export async function assertProjectAccess(
   if (!membership || membership.status !== 'ACTIVE') {
     throw new ForbiddenError('You are not an active member of this organization.');
   }
+}
+
+export async function assertProjectAccess(
+  organizationId: string,
+  projectId: string,
+  userId: string,
+  brandId?: string
+): Promise<void> {
+  await assertOrganizationAccess(organizationId, userId);
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, organizationId, isArchived: false },

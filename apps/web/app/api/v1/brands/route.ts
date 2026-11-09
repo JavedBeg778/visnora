@@ -6,6 +6,8 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertOrganizationAccess,
+  assertProjectAccess,
 } from '@/lib/api-handler';
 import {
   getBrands,
@@ -33,6 +35,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (projectId) await assertProjectAccess(orgId, projectId, user.id); else await assertOrganizationAccess(orgId, user.id);
     const brands = await getBrands(orgId, projectId);
     return formatSuccessResponse(brands);
   } catch (err) {
@@ -60,6 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = CreateBrandSchema.parse(body);
+    await assertProjectAccess(orgId, projectId, user.id);
     const brand = await createBrand(orgId, projectId, validated);
 
     return formatSuccessResponse(brand, 201);

@@ -27,7 +27,6 @@ jobs:
       NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
       SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
       APP_ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
-      GEMINI_API_KEY: ci-placeholder-gemini-key
     steps:
       - name: Checkout
         uses: actions/checkout@v4

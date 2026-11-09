@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = CreatePromptGroupSchema.parse(body);
-    await assertProjectAccess(orgId, projectId, user.id);
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'MEMBER');
     const group = await createPromptGroup(orgId, projectId, {
       name: validated.name,
       description: validated.description,

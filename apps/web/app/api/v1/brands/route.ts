@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = CreateBrandSchema.parse(body);
-    await assertProjectAccess(orgId, projectId, user.id);
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'MEMBER');
     const brand = await createBrand(orgId, projectId, validated);
 
     return formatSuccessResponse(brand, 201);

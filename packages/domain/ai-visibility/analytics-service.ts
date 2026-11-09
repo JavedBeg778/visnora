@@ -485,6 +485,7 @@ export async function getHistoricalTrends(
   const dailyMap = new Map<string, {
     date: string;
     runsCount: number;
+    runsWithBrand: number;
     runsWithCitations: number;
     brandMentions: number;
     compMentions: number;
@@ -499,6 +500,7 @@ export async function getHistoricalTrends(
     const existing = dailyMap.get(day) || {
       date: day,
       runsCount: 0,
+      runsWithBrand: 0,
       runsWithCitations: 0,
       brandMentions: 0,
       compMentions: 0,
@@ -526,6 +528,7 @@ export async function getHistoricalTrends(
 
       existing.brandMentions += brandMentions.length;
       existing.compMentions += competitorMentions.length;
+      if (brandMentions.length > 0) existing.runsWithBrand++;
       existing.brandSentimentCount += brandMentions.length;
       existing.positiveBrandMentions += brandMentions.filter(
         (mention) => mention.sentiment.toString() === 'POSITIVE'
@@ -540,7 +543,7 @@ export async function getHistoricalTrends(
   return Array.from(dailyMap.values()).map((day) => {
     const totalMentions = day.brandMentions + day.compMentions;
     const mentionRate = day.runsCount > 0
-      ? Number(((day.brandMentions / day.runsCount) * 100).toFixed(1))
+      ? Number(((day.runsWithBrand / day.runsCount) * 100).toFixed(1))
       : 0;
     const shareOfVoice = totalMentions > 0
       ? Number(((day.brandMentions / totalMentions) * 100).toFixed(1))

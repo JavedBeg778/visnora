@@ -39,7 +39,6 @@ export function formatErrorResponse(
   let status = defaultStatus;
   let code = defaultCode;
   let message = defaultMessage;
-  let details: any = undefined;
 
   if (error instanceof ForbiddenError) {
     status = 403;
@@ -64,8 +63,7 @@ export function formatErrorResponse(
         code,
         message,
         traceId,
-        ...(details ? { details } : {}),
-      },
+        },
     },
     { status }
   );

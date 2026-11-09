@@ -88,7 +88,7 @@ export async function DELETE(
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
-    await assertOrganizationAccess(orgId, user.id);
+    await assertOrganizationAccess(orgId, user.id, 'MEMBER');
     const archived = await archiveCompetitor(id, orgId);
     return formatSuccessResponse(archived);
   } catch (err) {

@@ -6,8 +6,9 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertProjectAccess,
 } from '@/lib/api-handler';
-import { retryFailedTrackingRun } from '@/domain/ai-visibility/collection-engine';
+import { getTrackingRunById, retryFailedTrackingRun } from '@/domain/ai-visibility/collection-engine';
 
 export async function POST(
   request: NextRequest,
@@ -27,6 +28,8 @@ export async function POST(
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
+    const existingRun = await getTrackingRunById(id, orgId);
+    await assertProjectAccess(orgId, existingRun.projectId, user.id);
     const result = await retryFailedTrackingRun(id, orgId, user.id);
     return formatSuccessResponse(result);
   } catch (err) {

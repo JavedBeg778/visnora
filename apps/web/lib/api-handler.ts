@@ -132,12 +132,14 @@ export async function assertOrganizationAccess(
 ): Promise<void> {
   const membership = await prisma.organizationMember.findUnique({
     where: { uq_org_user: { organizationId, userId } },
-    select: { status: true },
+    select: { status: true, role: true },
   });
 
   if (!membership || membership.status !== 'ACTIVE') {
     throw new ForbiddenError('You are not an active member of this organization.');
   }
+
+  assertPermission(membership.role as OrgRole, requiredRole);
 }
 
 export async function assertProjectAccess(

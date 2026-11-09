@@ -61,7 +61,7 @@ export async function PATCH(
     }
 
     const validated = UpdateTrackedPromptSchema.parse(body);
-    await assertOrganizationAccess(orgId, user.id);
+    await assertOrganizationAccess(orgId, user.id, 'MEMBER');
     const updated = await updatePrompt(id, orgId, validated);
 
     return formatSuccessResponse(updated);

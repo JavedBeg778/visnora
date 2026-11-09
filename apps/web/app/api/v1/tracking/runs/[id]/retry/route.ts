@@ -29,7 +29,7 @@ export async function POST(
     }
 
     const existingRun = await getTrackingRunById(id, orgId);
-    await assertProjectAccess(orgId, existingRun.projectId, user.id);
+    await assertProjectAccess(orgId, existingRun.projectId, user.id, undefined, 'ANALYST');
     const result = await retryFailedTrackingRun(id, orgId, user.id);
     return formatSuccessResponse(result);
   } catch (err) {

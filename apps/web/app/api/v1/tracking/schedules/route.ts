@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = SaveTrackingScheduleSchema.parse(body);
-    await assertProjectAccess(orgId, projectId, user.id);
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'ANALYST');
     const schedule = await saveTrackingSchedule(orgId, projectId, validated);
 
     return formatSuccessResponse(schedule);

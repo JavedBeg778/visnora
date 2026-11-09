@@ -6,6 +6,7 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertProjectAccess,
 } from '@/lib/api-handler';
 import { getTrackingRuns } from '@/domain/ai-visibility/collection-engine';
 
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
+    await assertProjectAccess(orgId, projectId, user.id);
     const runs = await getTrackingRuns(orgId, projectId, 1, limit);
     return formatSuccessResponse(runs);
   } catch (err) {

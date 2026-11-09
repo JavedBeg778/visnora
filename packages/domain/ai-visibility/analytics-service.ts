@@ -62,6 +62,12 @@ export async function getProjectVisibilityOverview(
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - dateRangeDays);
 
+  const configuredCompetitors = await prisma.competitor.findMany({
+    where: { organizationId, projectId, isArchived: false },
+    select: { id: true },
+  });
+  const configuredCompetitorIds = new Set(configuredCompetitors.map((competitor) => competitor.id));
+
   // 1. Fetch completed prompt runs with AI response, mentions, and citations
   const runs = await prisma.promptRun.findMany({
     where: {
@@ -138,9 +144,12 @@ export async function getProjectVisibilityOverview(
     const brandMentions = brandId
       ? run.aiResponse.mentions.filter((m) => m.matchedEntityId === brandId || (m.mentionType === 'PRIMARY_BRAND' && !m.matchedEntityId))
       : run.aiResponse.mentions.filter((m) => m.mentionType === 'PRIMARY_BRAND');
-    const compMentions = brandId
-      ? run.aiResponse.mentions.filter((m) => m.matchedEntityId !== brandId)
-      : run.aiResponse.mentions.filter((m) => m.mentionType === 'COMPETITOR');
+    const compMentions = run.aiResponse.mentions.filter(
+      (mention) => mention.mentionType === 'COMPETITOR' &&
+        mention.matchedEntityId !== null &&
+        configuredCompetitorIds.has(mention.matchedEntityId) &&
+        mention.matchedEntityId !== brandId
+    );
     const citations = run.aiResponse.citations;
 
     if (brandMentions.length > 0) {

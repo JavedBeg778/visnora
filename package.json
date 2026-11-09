@@ -8,7 +8,7 @@
     "build": "prisma generate --schema=packages/database/prisma/schema.prisma && node scripts/prepare-prisma-vercel.js prebuild && next build apps/web && node scripts/prepare-prisma-vercel.js postbuild",
     "start": "next start apps/web",
     "postinstall": "prisma generate --schema=packages/database/prisma/schema.prisma && node scripts/prepare-prisma-vercel.js prebuild",
-    "lint": "next lint",
+    "lint": "eslint apps/web packages tests scripts --ext .ts,.tsx,.js,.jsx",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

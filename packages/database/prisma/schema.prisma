@@ -409,6 +409,7 @@ model PromptRun {
   usageRecord        AIUsageRecord?
 
   @@index([promptId, createdAt(sort: Desc)])
+  @@index([organizationId, projectId, status, createdAt(sort: Desc)])
   @@index([trackingRunId])
   @@index([organizationId])
   @@map("prompt_runs")

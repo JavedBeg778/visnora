@@ -6,6 +6,8 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertOrganizationAccess,
+  assertProjectAccess,
 } from '@/lib/api-handler';
 import {
   getPromptById,
@@ -32,6 +34,7 @@ export async function GET(
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
+    await assertOrganizationAccess(orgId, user.id);
     const prompt = await getPromptById(id, orgId);
     return formatSuccessResponse(prompt);
   } catch (err) {
@@ -58,6 +61,7 @@ export async function PATCH(
     }
 
     const validated = UpdateTrackedPromptSchema.parse(body);
+    await assertOrganizationAccess(orgId, user.id);
     const updated = await updatePrompt(id, orgId, validated);
 
     return formatSuccessResponse(updated);
@@ -84,6 +88,7 @@ export async function DELETE(
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
+    await assertOrganizationAccess(orgId, user.id);
     const archived = await archivePrompt(id, orgId);
     return formatSuccessResponse(archived);
   } catch (err) {

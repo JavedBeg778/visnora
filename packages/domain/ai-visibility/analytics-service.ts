@@ -449,6 +449,47 @@ export async function getCitationIntelligence(
 }
 
 /**
+ * Calculates one daily trend bucket using the same canonical score as the overview.
+ * Mention rate is response coverage (responses containing the brand), not raw mention count.
+ */
+export function calculateDailyVisibilityMetrics(input: {
+  runsCount: number;
+  runsWithBrand: number;
+  brandMentions: number;
+  competitorMentions: number;
+  runsWithCitations: number;
+  positiveBrandMentions: number;
+  brandSentimentCount: number;
+}) {
+  const totalMentions = input.brandMentions + input.competitorMentions;
+  const mentionRate = input.runsCount > 0
+    ? Number(((input.runsWithBrand / input.runsCount) * 100).toFixed(1))
+    : 0;
+  const shareOfVoice = totalMentions > 0
+    ? Number(((input.brandMentions / totalMentions) * 100).toFixed(1))
+    : 0;
+  const citationRate = input.runsCount > 0
+    ? Number(((input.runsWithCitations / input.runsCount) * 100).toFixed(1))
+    : 0;
+  const positiveSentimentRate = input.brandSentimentCount > 0
+    ? Number(((input.positiveBrandMentions / input.brandSentimentCount) * 100).toFixed(1))
+    : 0;
+
+  return {
+    mentionRate,
+    shareOfVoice,
+    citationRate,
+    positiveSentimentRate,
+    visibilityScore: calculateAiVisibilityScore({
+      observedMentionRate: mentionRate,
+      sampleShareOfVoice: shareOfVoice,
+      citationRate,
+      positiveSentimentRate,
+    }).score,
+  };
+}
+
+/**
  * Historical time-series trends grouped by daily buckets
  */
 export async function getHistoricalTrends(
@@ -540,36 +581,18 @@ export async function getHistoricalTrends(
     dailyMap.set(day, existing);
   }
 
-  return Array.from(dailyMap.values()).map((day) => {
-    const totalMentions = day.brandMentions + day.compMentions;
-    const mentionRate = day.runsCount > 0
-      ? Number(((day.runsWithBrand / day.runsCount) * 100).toFixed(1))
-      : 0;
-    const shareOfVoice = totalMentions > 0
-      ? Number(((day.brandMentions / totalMentions) * 100).toFixed(1))
-      : 0;
-    const citationRate = day.runsCount > 0
-      ? Number(((day.runsWithCitations / day.runsCount) * 100).toFixed(1))
-      : 0;
-    const positiveSentimentRate = day.brandSentimentCount > 0
-      ? Number(((day.positiveBrandMentions / day.brandSentimentCount) * 100).toFixed(1))
-      : 0;
-    const score = calculateAiVisibilityScore({
-      observedMentionRate: mentionRate,
-      sampleShareOfVoice: shareOfVoice,
-      citationRate,
-      positiveSentimentRate,
-    }).score;
-
-    return {
-      date: day.date,
+  return Array.from(dailyMap.values()).map((day) => ({
+    date: day.date,
+    runsCount: day.runsCount,
+    ...calculateDailyVisibilityMetrics({
       runsCount: day.runsCount,
-      visibilityScore: score,
-      mentionRate,
-      shareOfVoice,
-      citationRate,
-      positiveSentimentRate,
-      citationsCount: day.citationsCount,
-    };
-  });
+      runsWithBrand: day.runsWithBrand,
+      brandMentions: day.brandMentions,
+      competitorMentions: day.compMentions,
+      runsWithCitations: day.runsWithCitations,
+      positiveBrandMentions: day.positiveBrandMentions,
+      brandSentimentCount: day.brandSentimentCount,
+    }),
+    citationsCount: day.citationsCount,
+  }));
 }

@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = GeneratePromptsSchema.parse(body);
-    await assertProjectAccess(orgId, projectId, user.id);
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'ANALYST');
     const suggestions = await generatePromptSuggestionsForProject(orgId, projectId, {
       count: validated.count,
       categories: validated.categories,

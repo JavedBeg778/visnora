@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from './supabase/server';
 import { ForbiddenError } from '@/shared/permissions/rbac';
 import { NotFoundError, ValidationError } from '@/domain/organizations/service';
+import { prisma } from '@/database/src/client';
 
 export interface AuthenticatedUser {
   id: string;
@@ -116,4 +117,49 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Authen
   }
 
   return null;
+}
+
+
+/**
+ * Validates that the authenticated user is an active member of the requested
+ * organization and that the project (and optional brand) belong to that tenant.
+ */
+export async function assertProjectAccess(
+  organizationId: string,
+  projectId: string,
+  userId: string,
+  brandId?: string
+): Promise<void> {
+  const membership = await prisma.organizationMember.findUnique({
+    where: { uq_org_user: { organizationId, userId } },
+    select: { status: true },
+  });
+
+  if (!membership || membership.status !== 'ACTIVE') {
+    throw new ForbiddenError('You are not an active member of this organization.');
+  }
+
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, organizationId, isArchived: false },
+    select: { id: true },
+  });
+
+  if (!project) throw new NotFoundError('Project not found in this organization.');
+
+  if (brandId) {
+    const brand = await prisma.brand.findFirst({
+      where: { id: brandId, organizationId, projectId, isArchived: false },
+      select: { id: true },
+    });
+    if (!brand) throw new NotFoundError('Brand not found in this project.');
+  }
+}
+
+export function parseDateRangeDays(value: string | null, defaultValue = 30): number {
+  if (value === null) return defaultValue;
+  const days = Number(value);
+  if (!Number.isInteger(days) || days < 1 || days > 365) {
+    throw new ValidationError('days must be an integer between 1 and 365.');
+  }
+  return days;
 }

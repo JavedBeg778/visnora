@@ -20,6 +20,7 @@ import {
 } from '../../packages/domain/ai-visibility/analysis-service';
 import {
   calculateAiVisibilityScore,
+  calculateDailyVisibilityMetrics,
 } from '../../packages/domain/ai-visibility/analytics-service';
 import {
   generatePromptSuggestions,
@@ -224,6 +225,45 @@ describe('Milestone M2 — AI Visibility MVP Unit & Domain Tests', () => {
       expect(breakdown.citationComponent).toBe(7.5);
       expect(breakdown.sentimentComponent).toBe(10.5);
       expect(breakdown.formulaNotice).toContain('45% Mention Rate');
+    });
+
+    it('calculates daily OMR from runs containing the brand, not raw mention count', () => {
+      const metrics = calculateDailyVisibilityMetrics({
+        runsCount: 4,
+        runsWithBrand: 2,
+        brandMentions: 5,
+        competitorMentions: 5,
+        runsWithCitations: 3,
+        positiveBrandMentions: 4,
+        brandSentimentCount: 5,
+      });
+
+      // Multiple mentions in one response must not inflate response coverage above 100%.
+      expect(metrics.mentionRate).toBe(50);
+      expect(metrics.shareOfVoice).toBe(50);
+      expect(metrics.citationRate).toBe(75);
+      expect(metrics.positiveSentimentRate).toBe(80);
+      expect(metrics.visibilityScore).toBe(58.25);
+    });
+
+    it('returns zero-valued daily metrics for an empty bucket', () => {
+      const metrics = calculateDailyVisibilityMetrics({
+        runsCount: 0,
+        runsWithBrand: 0,
+        brandMentions: 0,
+        competitorMentions: 0,
+        runsWithCitations: 0,
+        positiveBrandMentions: 0,
+        brandSentimentCount: 0,
+      });
+
+      expect(metrics).toEqual({
+        mentionRate: 0,
+        shareOfVoice: 0,
+        citationRate: 0,
+        positiveSentimentRate: 0,
+        visibilityScore: 0,
+      });
     });
 
     it('handles edge case of 0% visibility gracefully', () => {

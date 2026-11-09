@@ -4,7 +4,8 @@
 import crypto from 'crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { createClient } from './supabase/server';
-import { ForbiddenError } from '@/shared/permissions/rbac';
+import { assertPermission, ForbiddenError } from '@/shared/permissions/rbac';
+import type { OrgRole } from '@/shared/types/index';
 import { NotFoundError, ValidationError } from '@/domain/organizations/service';
 import { prisma } from '@/database/src/client';
 
@@ -126,7 +127,8 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Authen
  */
 export async function assertOrganizationAccess(
   organizationId: string,
-  userId: string
+  userId: string,
+  requiredRole: OrgRole = 'VIEWER'
 ): Promise<void> {
   const membership = await prisma.organizationMember.findUnique({
     where: { uq_org_user: { organizationId, userId } },
@@ -142,9 +144,10 @@ export async function assertProjectAccess(
   organizationId: string,
   projectId: string,
   userId: string,
-  brandId?: string
+  brandId?: string,
+  requiredRole: OrgRole = 'VIEWER'
 ): Promise<void> {
-  await assertOrganizationAccess(organizationId, userId);
+  await assertOrganizationAccess(organizationId, userId, requiredRole);
 
   const project = await prisma.project.findFirst({
     where: { id: projectId, organizationId, isArchived: false },

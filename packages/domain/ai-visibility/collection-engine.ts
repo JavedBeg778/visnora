@@ -111,15 +111,6 @@ export async function initTrackingRun(options: TrackingRunOptions): Promise<Init
   let targetBrand = null;
   if (brandId) {
     targetBrand = project.brands.find((b) => b.id === brandId);
-    if (!targetBrand) {
-      // Check if brand exists directly under organization
-      const directBrand = await prisma.brand.findFirst({
-        where: { id: brandId, organizationId, isArchived: false },
-      });
-      if (directBrand) {
-        targetBrand = directBrand;
-      }
-    }
   }
   if (!targetBrand) {
     targetBrand = project.brands.find((b) => b.isPrimary) || project.brands[0];

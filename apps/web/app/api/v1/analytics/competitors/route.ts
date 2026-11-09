@@ -6,6 +6,8 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertProjectAccess,
+  parseDateRangeDays,
 } from '@/lib/api-handler';
 import { getCompetitorComparison } from '@/domain/ai-visibility/analytics-service';
 
@@ -19,7 +21,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const orgId = request.headers.get('x-organization-id') || searchParams.get('orgId');
     const projectId = searchParams.get('projectId');
-    const days = parseInt(searchParams.get('days') || '30', 10);
+    const days = parseDateRangeDays(searchParams.get('days'));
 
     if (!orgId) {
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
@@ -28,6 +30,8 @@ export async function GET(request: NextRequest) {
     if (!projectId) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
+
+    await assertProjectAccess(orgId, projectId, user.id);
 
     const comparison = await getCompetitorComparison(orgId, projectId, days);
     return formatSuccessResponse(comparison);

@@ -6,6 +6,7 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertProjectAccess,
 } from '@/lib/api-handler';
 import {
   getTrackingSchedule,
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
+    await assertProjectAccess(orgId, projectId, user.id);
     const schedule = await getTrackingSchedule(orgId, projectId);
     return formatSuccessResponse(schedule);
   } catch (err) {
@@ -59,6 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = SaveTrackingScheduleSchema.parse(body);
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'ANALYST');
     const schedule = await saveTrackingSchedule(orgId, projectId, validated);
 
     return formatSuccessResponse(schedule);

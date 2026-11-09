@@ -62,6 +62,12 @@ export async function getProjectVisibilityOverview(
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - dateRangeDays);
 
+  const configuredCompetitors = await prisma.competitor.findMany({
+    where: { organizationId, projectId, isArchived: false },
+    select: { id: true },
+  });
+  const configuredCompetitorIds = new Set(configuredCompetitors.map((competitor) => competitor.id));
+
   // 1. Fetch completed prompt runs with AI response, mentions, and citations
   const runs = await prisma.promptRun.findMany({
     where: {
@@ -138,9 +144,12 @@ export async function getProjectVisibilityOverview(
     const brandMentions = brandId
       ? run.aiResponse.mentions.filter((m) => m.matchedEntityId === brandId || (m.mentionType === 'PRIMARY_BRAND' && !m.matchedEntityId))
       : run.aiResponse.mentions.filter((m) => m.mentionType === 'PRIMARY_BRAND');
-    const compMentions = brandId
-      ? run.aiResponse.mentions.filter((m) => m.matchedEntityId !== brandId)
-      : run.aiResponse.mentions.filter((m) => m.mentionType === 'COMPETITOR');
+    const compMentions = run.aiResponse.mentions.filter(
+      (mention) => mention.mentionType === 'COMPETITOR' &&
+        mention.matchedEntityId !== null &&
+        configuredCompetitorIds.has(mention.matchedEntityId) &&
+        mention.matchedEntityId !== brandId
+    );
     const citations = run.aiResponse.citations;
 
     if (brandMentions.length > 0) {
@@ -440,6 +449,47 @@ export async function getCitationIntelligence(
 }
 
 /**
+ * Calculates one daily trend bucket using the same canonical score as the overview.
+ * Mention rate is response coverage (responses containing the brand), not raw mention count.
+ */
+export function calculateDailyVisibilityMetrics(input: {
+  runsCount: number;
+  runsWithBrand: number;
+  brandMentions: number;
+  competitorMentions: number;
+  runsWithCitations: number;
+  positiveBrandMentions: number;
+  brandSentimentCount: number;
+}) {
+  const totalMentions = input.brandMentions + input.competitorMentions;
+  const mentionRate = input.runsCount > 0
+    ? Number(((input.runsWithBrand / input.runsCount) * 100).toFixed(1))
+    : 0;
+  const shareOfVoice = totalMentions > 0
+    ? Number(((input.brandMentions / totalMentions) * 100).toFixed(1))
+    : 0;
+  const citationRate = input.runsCount > 0
+    ? Number(((input.runsWithCitations / input.runsCount) * 100).toFixed(1))
+    : 0;
+  const positiveSentimentRate = input.brandSentimentCount > 0
+    ? Number(((input.positiveBrandMentions / input.brandSentimentCount) * 100).toFixed(1))
+    : 0;
+
+  return {
+    mentionRate,
+    shareOfVoice,
+    citationRate,
+    positiveSentimentRate,
+    visibilityScore: calculateAiVisibilityScore({
+      observedMentionRate: mentionRate,
+      sampleShareOfVoice: shareOfVoice,
+      citationRate,
+      positiveSentimentRate,
+    }).score,
+  };
+}
+
+/**
  * Historical time-series trends grouped by daily buckets
  */
 export async function getHistoricalTrends(
@@ -451,73 +501,98 @@ export async function getHistoricalTrends(
   const sinceDate = new Date();
   sinceDate.setDate(sinceDate.getDate() - dateRangeDays);
 
-  const runs = await prisma.promptRun.findMany({
-    where: {
-      organizationId,
-      projectId,
-      status: 'COMPLETED',
-      createdAt: { gte: sinceDate },
-    },
-    include: {
-      aiResponse: {
-        include: {
-          mentions: true,
-          citations: true,
+  const [runs, competitors] = await Promise.all([
+    prisma.promptRun.findMany({
+      where: {
+        organizationId,
+        projectId,
+        status: 'COMPLETED',
+        createdAt: { gte: sinceDate },
+      },
+      include: {
+        aiResponse: {
+          include: { mentions: true, citations: true },
         },
       },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.competitor.findMany({
+      where: { organizationId, projectId, isArchived: false },
+      select: { id: true },
+    }),
+  ]);
 
-  const dailyMap = new Map<
-    string,
-    { date: string; runsCount: number; brandMentions: number; compMentions: number; citationsCount: number }
-  >();
+  const competitorIds = new Set(competitors.map((competitor) => competitor.id));
+  const dailyMap = new Map<string, {
+    date: string;
+    runsCount: number;
+    runsWithBrand: number;
+    runsWithCitations: number;
+    brandMentions: number;
+    compMentions: number;
+    positiveBrandMentions: number;
+    brandSentimentCount: number;
+    citationsCount: number;
+  }>();
 
   for (const run of runs) {
+    // UTC date buckets keep the trend chart stable across server regions.
     const day = run.createdAt.toISOString().slice(0, 10);
     const existing = dailyMap.get(day) || {
       date: day,
       runsCount: 0,
+      runsWithBrand: 0,
+      runsWithCitations: 0,
       brandMentions: 0,
       compMentions: 0,
+      positiveBrandMentions: 0,
+      brandSentimentCount: 0,
       citationsCount: 0,
     };
 
     existing.runsCount++;
 
     if (run.aiResponse) {
-      const bMentions = brandId
-        ? run.aiResponse.mentions.filter((m) => m.matchedEntityId === brandId || (m.mentionType === 'PRIMARY_BRAND' && !m.matchedEntityId)).length
-        : run.aiResponse.mentions.filter((m) => m.mentionType === 'PRIMARY_BRAND').length;
-      const cMentions = brandId
-        ? run.aiResponse.mentions.filter((m) => m.matchedEntityId !== brandId).length
-        : run.aiResponse.mentions.filter((m) => m.mentionType === 'COMPETITOR').length;
+      const brandMentions = run.aiResponse.mentions.filter((mention) =>
+        brandId
+          ? mention.matchedEntityId === brandId ||
+            (mention.mentionType === 'PRIMARY_BRAND' && !mention.matchedEntityId)
+          : mention.mentionType === 'PRIMARY_BRAND'
+      );
+      const competitorMentions = run.aiResponse.mentions.filter(
+        (mention) =>
+          mention.mentionType === 'COMPETITOR' &&
+          mention.matchedEntityId !== null &&
+          competitorIds.has(mention.matchedEntityId) &&
+          mention.matchedEntityId !== brandId
+      );
 
-      existing.brandMentions += bMentions;
-      existing.compMentions += cMentions;
+      existing.brandMentions += brandMentions.length;
+      existing.compMentions += competitorMentions.length;
+      if (brandMentions.length > 0) existing.runsWithBrand++;
+      existing.brandSentimentCount += brandMentions.length;
+      existing.positiveBrandMentions += brandMentions.filter(
+        (mention) => mention.sentiment.toString() === 'POSITIVE'
+      ).length;
       existing.citationsCount += run.aiResponse.citations.length;
+      if (run.aiResponse.citations.length > 0) existing.runsWithCitations++;
     }
 
     dailyMap.set(day, existing);
   }
 
-  const trends = Array.from(dailyMap.values()).map((d) => {
-    const totalM = d.brandMentions + d.compMentions;
-    const ssov = totalM > 0 ? Number(((d.brandMentions / totalM) * 100).toFixed(1)) : 0;
-    const omr = d.runsCount > 0 ? Number(((d.brandMentions / d.runsCount) * 100).toFixed(1)) : 0;
-    const score = Number(((omr * 0.5) + (ssov * 0.3) + Math.min(20, d.citationsCount * 2)).toFixed(1));
-
-    return {
-      date: d.date,
-      runsCount: d.runsCount,
-      visibilityScore: Math.min(100, score),
-      mentionRate: omr,
-      shareOfVoice: ssov,
-      citationsCount: d.citationsCount,
-    };
-  });
-
-  return trends;
+  return Array.from(dailyMap.values()).map((day) => ({
+    date: day.date,
+    runsCount: day.runsCount,
+    ...calculateDailyVisibilityMetrics({
+      runsCount: day.runsCount,
+      runsWithBrand: day.runsWithBrand,
+      brandMentions: day.brandMentions,
+      competitorMentions: day.compMentions,
+      runsWithCitations: day.runsWithCitations,
+      positiveBrandMentions: day.positiveBrandMentions,
+      brandSentimentCount: day.brandSentimentCount,
+    }),
+    citationsCount: day.citationsCount,
+  }));
 }
-

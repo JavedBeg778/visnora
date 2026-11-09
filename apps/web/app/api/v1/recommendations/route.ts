@@ -6,6 +6,8 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertOrganizationAccess,
+  assertProjectAccess,
 } from '@/lib/api-handler';
 import { getRecommendations } from '@/domain/ai-visibility/recommendation-service';
 import { RecommendationStatus } from '@/shared/types/index';
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
+    await assertProjectAccess(orgId, projectId, user.id);
     const recommendations = await getRecommendations(orgId, projectId, status);
     return formatSuccessResponse(recommendations);
   } catch (err) {

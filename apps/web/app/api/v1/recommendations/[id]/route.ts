@@ -30,7 +30,7 @@ export async function PATCH(
     }
 
     const validated = UpdateRecommendationSchema.parse(body);
-    await assertOrganizationAccess(orgId, user.id);
+    await assertOrganizationAccess(orgId, user.id, 'MEMBER');
     const updated = await updateRecommendationStatus(id, orgId, validated.status);
 
     return formatSuccessResponse(updated);

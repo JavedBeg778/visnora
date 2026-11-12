@@ -1,62 +1,122 @@
-# Visnora — AI Visibility & Ad Intelligence SaaS
+# Visnora — AI-Powered Marketing & Competitive Intelligence SaaS
 
-**Current milestone:** M3 — Intelligence and pilot hardening (in progress)  
-**Production:** https://visnora.vercel.app  
-**UI:** Strict light mode only.
+**Status:** Architectural Specification & Milestone Baseline  
+**Current Milestone Target:** M0 / M1 Foundation  
+**Primary Specification:** [PRD.md](file:///D:/react-native/VISNORA/docs/PRD.md)  
 
-Visnora helps brands and agencies understand how they appear in sampled AI-generated answers, compare observed visibility against configured competitors, inspect citation sources, and turn evidence into practical improvements. Planned expansion includes customer-authorized advertising analytics.
+---
 
-Core workflow: **Discover → Analyze → Compare → Recommend → Improve.**
+## 1. Overview & Vision
 
-> Visibility metrics are sampled observations from configured prompts and model responses. They are not global search impressions, market share, guaranteed rankings, or private competitor advertising metrics.
+Visnora is a commercial, multi-tenant Software-as-a-Service (SaaS) platform built for digital marketing agencies, SEO/GEO consultants, brand marketers, and business owners. It provides systematic intelligence into how brands appear in AI-generated answers, paired with competitive and first-party advertising analytics.
 
-## Milestones
+The platform unites three core intelligence modules on a shared SaaS foundation:
+1. **Module A — AI Visibility Intelligence**: Tracks brand presence, citations, and Share of Voice (SOV) across generative AI answer engines (Google Gemini, OpenAI).
+2. **Module B — Ad Intelligence**: Ingests customer-authorized first-party advertising data (Google Ads, Meta Ads) and analyzes legally accessible public ad creative registries (Meta Ad Library).
+3. **Module C — ChatGPT Ads Intelligence**: Connects customer-authorized OpenAI Ads accounts for native ChatGPT ad campaign and conversion performance reporting.
 
-- **M0 — Technical feasibility:** Completed.
-- **M1 — SaaS foundation:** Completed.
-- **M2 — AI Visibility MVP:** Completed.
-- **M3 — Intelligence and pilot hardening:** In progress.
-- **M4 — Subscription and billing:** Planned; requires Razorpay merchant configuration.
-- **M5 — Ad Intelligence:** Planned; requires customer-authorized Google/Meta account access and platform approvals.
-- **M6 — ChatGPT Ads Intelligence:** Conditional on official advertiser API/partner access.
+---
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for scope, gates and acceptance criteria.
+## 2. Master Documentation Index (`docs/`)
 
-## Technology
+The repository includes a comprehensive, authoritative documentation suite in [`docs/`](file:///D:/react-native/VISNORA/docs/):
 
-- Next.js App Router, React, TypeScript and Tailwind CSS
-- Supabase Auth and PostgreSQL; Prisma ORM
-- Gemini/OpenAI provider adapters
-- Recharts for analytics
-- Vitest and Playwright test tooling
-- BullMQ/Redis dependencies are present, but a durable prompt worker must be implemented and verified before scheduled tracking is described as reliable.
+| Document | Description |
+| :--- | :--- |
+| **[PRD.md](file:///D:/react-native/VISNORA/docs/PRD.md)** | Complete Product Requirements Document, user personas, non-goals, functional matrix (FR-001 to FR-020), and plan concepts. |
+| **[TECHNICAL_BLUEPRINT.md](file:///D:/react-native/VISNORA/docs/TECHNICAL_BLUEPRINT.md)** | System overview, tech stack justifications, operational workflows, and execution pipelines. |
+| **[ARCHITECTURE.md](file:///D:/react-native/VISNORA/docs/ARCHITECTURE.md)** | Modular monolith topology, multi-tenancy hierarchy, queue design (BullMQ), and caching boundaries. |
+| **[DATABASE_DESIGN.md](file:///D:/react-native/VISNORA/docs/DATABASE_DESIGN.md)** | PostgreSQL 16 schema, ERD, tables, UUIDv4 standards, composite indexes, and Supabase RLS policies. |
+| **[API_CONTRACT.md](file:///D:/react-native/VISNORA/docs/API_CONTRACT.md)** | RESTful v1 endpoints catalog, uniform JSON envelope, error mapping, and Zod validation schemas. |
+| **[SECURITY.md](file:///D:/react-native/VISNORA/docs/SECURITY.md)** | Multi-tenant isolation, RBAC matrix, AES-256-GCM credential encryption, SSRF protection, and webhook HMAC. |
+| **[DATA_METHODOLOGY.md](file:///D:/react-native/VISNORA/docs/DATA_METHODOLOGY.md)** | Data provenance classes (Actual, Observed, Sampled, Estimated, Platform-Reported) and mathematical formulas (OMR, SSOV). |
+| **[ROADMAP.md](file:///D:/react-native/VISNORA/docs/ROADMAP.md)** | Phased milestone plan (M0 through M7) with scopes, database tasks, security requirements, and acceptance criteria. |
+| **[INTEGRATIONS.md](file:///D:/react-native/VISNORA/docs/INTEGRATIONS.md)** | Third-party API feasibility register (Gemini, OpenAI, Google Ads, Meta, OpenAI Ads, Razorpay). |
+| **[DEVELOPMENT_GUIDELINES.md](file:///D:/react-native/VISNORA/docs/DEVELOPMENT_GUIDELINES.md)** | Engineering standards, TypeScript strictness, Prisma migrations, and Definition of Done. |
 
-## Local development
+---
 
-Requirements: Node.js 22+, npm 10+, a Visnora development Supabase project and configured environment variables.
+## 3. Technology Architecture
 
-```bash
-npm install
-npm run db:generate
-npm run dev
+- **Web & API Framework**: Next.js 15+ (App Router, Server Components, Route Handlers)
+- **UI & Design System**: React 19, Tailwind CSS, shadcn/ui, Recharts
+- **Database**: PostgreSQL 16+ (Supabase Managed Engine) with Row Level Security (RLS)
+- **ORM & Migrations**: Prisma ORM
+- **Authentication**: Supabase Auth (JWT, secure HTTP-only cookies)
+- **Asynchronous Processing**: BullMQ + Redis (Upstash / Redis 7+)
+- **Storage**: Supabase Storage (S3-compatible, signed download URLs)
+- **AI Adapters**: Google Gemini API (`@google/genai`), OpenAI API (`openai`)
+- **Payments**: Razorpay Node SDK (INR Subscriptions & Webhook HMAC Verification)
+
+---
+
+## 4. Repository Structure
+
+```
+VISNORA/
+├── apps/
+│   └── web/                # Next.js Application (Marketing, Auth, Dashboard, API routes)
+├── packages/
+│   ├── database/           # Prisma schema, migrations, DB client singleton
+│   ├── domain/             # Business logic (organizations, projects, AI visibility, billing)
+│   ├── integrations/       # External API clients (Gemini, OpenAI, Google Ads, Meta, Razorpay)
+│   ├── jobs/               # BullMQ background workers and schedulers
+│   └── shared/             # Shared TypeScript types, Zod schemas, RBAC rules, crypto
+├── docs/                   # 10 Master documentation files and original specification
+├── tests/                  # Unit, Integration, and Playwright E2E suites
+├── .env.example            # Sanitized environment template
+└── package.json            # Root dependency manifest and scripts
 ```
 
-Use a local `.env.local` populated from `.env.example`. Never commit secrets or production credentials.
+---
 
-## Repository map
+## 5. Development Setup & Quickstart
 
-- `apps/web` — Next.js app, dashboard and API routes
-- `packages/database` — Prisma schema and migrations
-- `packages/domain` — domain services and business rules
-- `packages/integrations` — AI provider adapters
-- `packages/shared` — shared validation, permissions and utilities
-- `docs` — product, architecture, security, data methodology and roadmap
-- `tests` — unit and end-to-end tests
+### Prerequisites
+- Node.js v22+
+- npm v10+
+- Supabase account (PostgreSQL & Auth)
+- Redis instance (local or Upstash)
 
-## Engineering guardrails
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone <repo-url>
+   cd VISNORA
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Configure environment:
+   ```bash
+   cp .env.example .env.local
+   # Populate .env.local with development API keys and Supabase credentials
+   ```
+4. Generate Prisma client & apply migrations:
+   ```bash
+   npm run db:generate
+   npm run db:migrate
+   ```
+5. Run development server:
+   ```bash
+   npm run dev
+   ```
 
-- Enforce tenant isolation server-side; never trust client-supplied organization/project IDs without membership checks.
-- Keep the UI in light mode.
-- Do not run paid AI collection or modify production data as a side effect of tests.
-- Do not expose private competitor advertising performance.
-- Keep credentials out of source control and logs.
+---
+
+## 6. Development Milestones
+- **M0**: Discovery & Technical Feasibility *(Active baseline)*
+- **M1**: Core SaaS Foundation & Tenancy Infrastructure
+- **M2**: AI Visibility Intelligence MVP
+- **M3**: Pilot Testing & Hardening
+- **M4**: Subscription & Monetization (Razorpay)
+- **M5**: Ad Intelligence (Own-Account & Permitted Public Creative)
+- **M6**: ChatGPT Ads Intelligence
+- **M7**: Advanced Features, Scaling & Automation
+
+---
+
+## 7. License & Rights
+Commercial SaaS proprietary software. All rights reserved.
+

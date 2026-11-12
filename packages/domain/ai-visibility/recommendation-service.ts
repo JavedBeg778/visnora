@@ -190,6 +190,48 @@ export async function generateRecommendationsForRun(
     }
   }
 
+  // 4. Check for Negative Sentiment Mentions
+  const negativeBrandMentions = [];
+  for (const pr of run.promptRuns) {
+    if (!pr.aiResponse) continue;
+    for (const m of pr.aiResponse.mentions) {
+      if (m.mentionType === 'PRIMARY_BRAND' && m.sentiment === 'NEGATIVE') {
+        negativeBrandMentions.push({
+          prompt: pr.prompt.promptText,
+          evidence: m.evidenceText,
+        });
+      }
+    }
+  }
+
+  if (negativeBrandMentions.length > 0) {
+    const existing = await prisma.recommendation.findFirst({
+      where: {
+        projectId,
+        title: 'Address Critical Sentiment & Negative Citations in AI Answers',
+      },
+    });
+
+    if (!existing) {
+      const sample = negativeBrandMentions[0];
+      const rec = await prisma.recommendation.create({
+        data: {
+          organizationId,
+          projectId,
+          title: 'Address Critical Sentiment & Negative Citations in AI Answers',
+          explanation: `Observed ${negativeBrandMentions.length} negative sentiment assessment(s) referencing your brand across evaluated queries.`,
+          evidence: `Critical mention in query: "${sample.prompt}" — excerpt: "${sample.evidence.slice(0, 150)}..."`,
+          relatedMetric: 'Sentiment',
+          priority: 'HIGH',
+          suggestedAction:
+            'Review highlighted criticisms, update relevant public documentation, FAQs, and knowledge base pages to address model training misperceptions.',
+          status: 'NEW',
+        },
+      });
+      createdRecommendations.push(rec);
+    }
+  }
+
   return createdRecommendations;
 }
 

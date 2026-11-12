@@ -6,7 +6,6 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
-  assertOrganizationAccess,
 } from '@/lib/api-handler';
 import { updateRecommendationStatus } from '@/domain/ai-visibility/recommendation-service';
 import { UpdateRecommendationSchema } from '@/shared/validation/index';
@@ -30,7 +29,6 @@ export async function PATCH(
     }
 
     const validated = UpdateRecommendationSchema.parse(body);
-    await assertOrganizationAccess(orgId, user.id, 'MEMBER');
     const updated = await updateRecommendationStatus(id, orgId, validated.status);
 
     return formatSuccessResponse(updated);

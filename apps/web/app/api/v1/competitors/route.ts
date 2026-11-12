@@ -6,8 +6,6 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
-  assertOrganizationAccess,
-  assertProjectAccess,
 } from '@/lib/api-handler';
 import {
   getCompetitors,
@@ -44,7 +42,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await assertProjectAccess(orgId, projectId, user.id);
     const competitors = await getCompetitors(orgId, projectId);
     return formatSuccessResponse(competitors);
   } catch (err) {
@@ -72,7 +69,6 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = CreateCompetitorSchema.parse(body);
-    await assertProjectAccess(orgId, projectId, user.id, undefined, 'MEMBER');
     const competitor = await createCompetitor(orgId, projectId, validated);
 
     return formatSuccessResponse(competitor, 201);

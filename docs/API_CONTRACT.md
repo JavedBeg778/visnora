@@ -273,6 +273,22 @@ Analyzes top cited domains, citation frequencies, and verified external referenc
 #### `GET /api/v1/analytics/trends`
 Provides daily time-series historical data points for Recharts trend charts.
 
+#### `GET /api/v1/analytics/report`
+Exports comprehensive Pilot Intelligence Evaluation Reports formatted as structured JSON or RFC 4180 compliant CSV.
+- **Query Parameters**:
+  - `projectId`: Target project UUID (required).
+  - `brandId`: Target brand UUID (optional, defaults to primary project brand).
+  - `days`: Evaluation window (`7`, `30`, `90`, default `30`).
+  - `format`: Export format (`json` or `csv`, default `json`).
+- **Response Formats**:
+  - `format=json`: Executive summary, visibility KPIs with previous-period comparison deltas, competitor benchmarks, citation sources, and strategic recommendations.
+  - `format=csv`: Downloadable multi-section spreadsheet with `Content-Disposition: attachment; filename="visnora-pilot-report-...csv"`.
+
+#### `GET /api/v1/health`
+Operational readiness diagnostic endpoint for monitoring uptime, database query latency, and BullMQ/Redis queue status.
+- **Response**: `{ status: "healthy", services: { database: { status: "UP", latencyMs: 3 }, queue: { status: "UP"|"DEGRADED_SERVERLESS" } } }`
+- **HTTP Code**: 200 OK (503 Service Unavailable if database is unreachable).
+
 #### `GET /api/v1/recommendations`
 Returns actionable, evidence-based GEO recommendations.
 
@@ -319,17 +335,89 @@ Fetches platform-reported ChatGPT ad campaigns and performance metrics for the a
 
 ---
 
-### 2.6 Billing & Webhooks
+### 2.6 Subscription, Billing & Usage Metering (Implemented in M4)
+
+#### `GET /api/v1/billing/plans`
+Returns the public pricing catalog of subscription tiers (Free, Starter, Pro, Agency) including quotas, feature arrays, and integer prices in INR paise.
+- **Authentication**: Authenticated user.
+- **Response**: Array of `SubscriptionPlanDefinition`.
+
+#### `GET /api/v1/billing/subscription`
+Returns current organization subscription status, billing cycle, active period dates, plan details, and resolved feature entitlements.
+- **Headers**: `x-organization-id: <uuid>`
+- **Response**: `{ subscription: Subscription, entitlements: EntitlementMap }`.
+
+#### `POST /api/v1/billing/subscription/upgrade`
+Upgrades an organization's subscription tier. Requires `ADMIN` or `OWNER` role.
+- **Headers**: `x-organization-id: <uuid>`
+- **Payload**: `{ "planSlug": "pro", "billingCycle": "MONTHLY" | "ANNUAL" }`
+- **Response**: Updated subscription details and success message.
+
+#### `POST /api/v1/billing/subscription/downgrade`
+Downgrades an organization's subscription tier after verifying that current usage does not exceed the new tier's quota limits. Requires `ADMIN` or `OWNER` role.
+- **Headers**: `x-organization-id: <uuid>`
+- **Payload**: `{ "planSlug": "starter", "billingCycle": "MONTHLY" | "ANNUAL" }`
+- **Response**: Updated subscription details.
+
+#### `POST /api/v1/billing/subscription/cancel`
+Cancels the organization's subscription. Supports scheduled cancellation at the end of the current billing cycle or immediate cancellation.
+- **Headers**: `x-organization-id: <uuid>`
+- **Payload**: `{ "immediate": boolean, "reason": string }`
+- **Response**: Subscription cancellation details and effective date.
+
+#### `POST /api/v1/billing/subscription/reactivate`
+Restores auto-renewal for a subscription scheduled for cancellation prior to expiration.
+- **Headers**: `x-organization-id: <uuid>`
+- **Response**: Reactivated subscription details.
+
+#### `GET /api/v1/billing/usage`
+Returns real-time prompt quota usage metrics for the active billing cycle.
+- **Headers**: `x-organization-id: <uuid>`
+- **Response**: `{ promptRunsUsed: number, promptRunsLimit: number, promptRunsReserved: number, promptRunsRemaining: number, usagePercentage: number, isWarning80: boolean, isWarning100: boolean, periodEnd: string }`.
+
+#### `GET /api/v1/billing/usage/history`
+Returns paginated immutable usage ledger records (`UsageRecord`) for auditing.
+- **Query Parameters**: `page=1&limit=20`
+- **Response**: `{ records: UsageRecord[], pagination: { page, limit, total, totalPages } }`.
+
+#### `GET /api/v1/billing/invoices`
+Returns all issued tax invoices for the organization.
+- **Headers**: `x-organization-id: <uuid>`
+- **Response**: Array of `Invoice` records.
+
+#### `GET /api/v1/billing/invoices/:id`
+Retrieves a single invoice by its identifier.
+- **Response**: Detailed `Invoice` object.
+
+#### `GET /api/v1/billing/invoices/:id/download`
+Downloads a clean, self-contained HTML invoice/receipt with 18% GST tax breakdown.
+- **Response**: HTML document with `Content-Type: text/html`.
+
+#### `GET /api/v1/billing/payments`
+Returns payment transaction history including transaction references, statuses, and amounts in INR.
+- **Headers**: `x-organization-id: <uuid>`
+- **Response**: Array of `Payment` records.
 
 #### `POST /api/v1/billing/checkout`
-Creates a Razorpay subscription checkout session.
-- **Payload**: `{ "planTier": "PRO", "billingCycle": "MONTHLY" }`
-- **Response**: `{ "razorpaySubscriptionId": "sub_...", "keyId": "rzp_..." }`
+Creates a provider-independent checkout session.
+- **Headers**: `x-organization-id: <uuid>`
+- **Payload**: `{ "planSlug": "starter" | "pro" | "agency", "billingCycle": "MONTHLY" | "ANNUAL" }`
+- **Response**: `CheckoutSessionResponse` (`sessionId`, `orderId`, `amountPaise`, `provider`, `status`).
 
-#### `POST /api/v1/webhooks/razorpay`
-Consumes signed Razorpay webhook notifications.
-- **Headers**: `X-Razorpay-Signature: <hmac_sha256>`
-- **Processing**: Verifies signature against `RAZORPAY_WEBHOOK_SECRET`, enforces idempotency via `webhook_events` table, and updates tenant entitlements.
+#### `POST /api/v1/billing/dev/simulate-payment`
+Development-only payment verification and activation endpoint. Strictly blocks with 403 in production.
+- **Payload**: `{ "sessionId": string, "simulateFailure": boolean, "failureReason"?: string }`
+- **Response**: `PaymentVerificationResult`.
+
+#### `GET /api/v1/admin/billing/overview`
+Administrative analytics endpoint returning MRR, ARR, active subscribers count, plan distribution, payment success rate, and platform prompt run utilization.
+- **Authentication**: Requires Platform Admin or Organization `OWNER`/`ADMIN`.
+- **Response**: `AdminBillingOverview`.
+
+#### `POST /api/v1/admin/billing/subscriptions/:id/grant`
+Administrative action to manually grant or override an organization's subscription plan with audit logging.
+- **Payload**: `{ "planSlug": string, "billingCycle"?: "MONTHLY" | "ANNUAL", "durationMonths"?: number, "reason": string }`
+- **Response**: Updated subscription record.
 
 ---
 
@@ -356,6 +444,139 @@ export const ConnectAdAccountSchema = z.object({
   credentialSecret: z.string().min(10), // API key or OAuth refresh token
 });
 ```
+
+---
+
+### 3.6 Ad Intelligence Endpoints (M5)
+
+#### 3.6.1 List & Search Ad Library
+- **Route:** `GET /api/v1/ads`
+- **Query Parameters:** `page`, `limit`, `competitorId`, `platform`, `format`, `status`, `search`
+- **Success Response (200 OK):**
+```json
+{
+  "success": true,
+  "data": {
+    "ads": [
+      {
+        "id": "ad_uuid",
+        "platform": "META_ADS",
+        "advertiserName": "Swiggy",
+        "headline": "Craving Biryani? Get Flat ₹125 OFF",
+        "primaryText": "Hungry? Lightning-fast 20-min delivery...",
+        "ctaText": "Order Now",
+        "format": "IMAGE",
+        "landingPageUrl": "https://www.swiggy.com/restaurants",
+        "status": "ACTIVE",
+        "firstSeenAt": "2026-11-07T10:00:00.000Z",
+        "creatives": [],
+        "analyses": []
+      }
+    ],
+    "pagination": { "page": 1, "limit": 20, "total": 52, "totalPages": 3 }
+  }
+}
+```
+
+#### 3.6.2 Discover Ads Across Public Sources
+- **Route:** `POST /api/v1/ads/discover`
+- **Request Body:** `{ "sourceType": "META_AD_LIBRARY", "query": "Swiggy", "country": "IN", "limit": 10 }`
+- **Success Response (200 OK):** Discovered ads array with platform limitation notes.
+
+#### 3.6.3 Execute Ad Collection & Extraction Pipeline
+- **Route:** `POST /api/v1/ads/collect`
+- **Request Body:** `{ "organizationId": "...", "projectId": "...", "query": "...", "sourceType": "META_AD_LIBRARY", "limit": 10, "autoAnalyze": true }`
+- **Success Response (201 Created):** `{ "runId": "run_...", "status": "COMPLETED", "totalFound": 10, "totalIngested": 10, "newAdsCount": 8 }`
+
+#### 3.6.4 Get Ad Record Details & AI Analysis
+- **Route:** `GET /api/v1/ads/[id]`
+- **Success Response (200 OK):** Ad record with creatives, landing pages, snapshots, and 12-dimension AI analyses.
+
+#### 3.6.5 Trigger On-Demand 12-Dimension AI Analysis
+- **Route:** `POST /api/v1/ads/[id]/analyze`
+- **Success Response (201 Created):** Full 12-dimension breakdown, confidence score, token usage, and cost in paise.
+
+#### 3.6.6 Competitor Ad Analytics Aggregates
+- **Route:** `GET /api/v1/ads/analytics?competitorId=[id]`
+- **Success Response (200 OK):** Platform distribution, format breakdown, top CTAs, active offers, messaging themes, and top landing pages.
+
+#### 3.6.7 Side-by-Side Ad Comparison
+- **Route:** `POST /api/v1/ads/compare`
+- **Request Body:** `{ "adIds": ["id1", "id2"], "title": "Optional Title" }`
+- **Success Response (200 OK):** Synthesized comparative analysis, common hooks, and contrasting strategic positioning.
+
+#### 3.6.8 AI Strategy Recommendations
+- **Route:** `GET /api/v1/ads/recommendations` & `PATCH /api/v1/ads/recommendations/[id]`
+- **Request Body (PATCH):** `{ "status": "APPLIED" }`
+- **Success Response (200 OK):** Recommendation details with observed competitor evidence and suggested creative play.
+
+#### 3.6.9 Competitor Ad Monitoring & Change Alerts
+- **Route:** `POST /api/v1/ads/monitoring` & `GET /api/v1/ads/changes`
+- **Success Response (200 OK):** Snapshot change log (`NEW_AD`, `HEADLINE_CHANGED`, `TEXT_CHANGED`, `CTA_CHANGED`, `LANDING_PAGE_CHANGED`, `REMOVED`).
+
+#### 3.6.10 Safe Manual Ad URL Ingestion
+- **Route:** `POST /api/v1/ads/submit-url`
+- **Request Body:** `{ "organizationId": "...", "projectId": "...", "url": "https://..." }`
+- **Security:** Anti-SSRF validation blocking loopback, private RFC 1918, and cloud metadata.
+- **Success Response (201 Created):** Extracted creative data and canonical content hash.
+
+---
+
+### 3.7 ChatGPT Ads Intelligence Endpoints (M6)
+
+#### 3.7.1 Account Connection & Management
+- **List Accounts:** `GET /api/v1/chatgpt-ads/accounts`
+- **Connect Account:** `POST /api/v1/chatgpt-ads/accounts/connect`
+  - Body: `{ "name": "...", "openaiAccountId": "...", "apiKey": "...", "currency": "USD", "timezone": "UTC" }`
+  - Security: Key encrypted with AES-256-GCM before storage.
+- **Get Account Details:** `GET /api/v1/chatgpt-ads/accounts/[id]`
+- **Disconnect Account:** `DELETE /api/v1/chatgpt-ads/accounts/[id]`
+- **Rotate API Key:** `POST /api/v1/chatgpt-ads/accounts/[id]/rotate-key`
+  - Body: `{ "newApiKey": "..." }`
+
+#### 3.7.2 Campaign Orchestration
+- **List Campaigns:** `GET /api/v1/chatgpt-ads/campaigns?accountId=[id]&status=[status]&search=[term]`
+- **Create Campaign:** `POST /api/v1/chatgpt-ads/campaigns`
+  - Body: `{ "accountId": "...", "name": "...", "objective": "CONVERSIONS", "budgetAmountPaise": 5000, "contextTargeting": [...], "financialConfirmation": true }`
+  - Safety: Strictly creates campaign in `PAUSED` status.
+- **Get Campaign:** `GET /api/v1/chatgpt-ads/campaigns/[id]`
+- **Update Campaign:** `PATCH /api/v1/chatgpt-ads/campaigns/[id]`
+- **Pause Campaign:** `POST /api/v1/chatgpt-ads/campaigns/[id]/pause`
+- **Resume/Activate Campaign:** `POST /api/v1/chatgpt-ads/campaigns/[id]/resume`
+  - Safety: Requires `{ "financialConfirmation": true }`.
+
+#### 3.7.3 Ad Groups & Creative Studio
+- **List Ad Groups:** `GET /api/v1/chatgpt-ads/ad-groups`
+- **Create Ad Group:** `POST /api/v1/chatgpt-ads/ad-groups`
+  - Body: `{ "campaignId": "...", "accountId": "...", "name": "...", "bidAmountPaise": 150, "contextHints": [...] }`
+- **List Ads:** `GET /api/v1/chatgpt-ads/ads`
+- **Create Ad:** `POST /api/v1/chatgpt-ads/ads`
+  - Body: `{ "adGroupId": "...", "accountId": "...", "name": "...", "headline": "...", "adCopy": "...", "advertiserName": "...", "destinationUrl": "..." }`
+- **Interactive Preview:** `POST /api/v1/chatgpt-ads/creatives/preview`
+- **AI Creative Suggestions:** `POST /api/v1/chatgpt-ads/creatives/suggest`
+
+#### 3.7.4 Performance Insights & Analytics
+- **Performance Overview:** `GET /api/v1/chatgpt-ads/insights?startDate=[date]&endDate=[date]`
+- **Daily Trends:** `GET /api/v1/chatgpt-ads/insights/trends`
+- **Campaign Breakdown:** `GET /api/v1/chatgpt-ads/insights/campaigns`
+- **Export CSV:** `GET /api/v1/chatgpt-ads/insights/export`
+
+#### 3.7.5 Conversion Telemetry & Conversions API (CAPI)
+- **List Events:** `GET /api/v1/chatgpt-ads/conversions?limit=50`
+- **Ingest Event:** `POST /api/v1/chatgpt-ads/conversions`
+  - Body: `{ "eventName": "PURCHASE", "valuePaise": 9900, "userEmail": "...", "eventSource": "SERVER" }`
+  - Deduplication: SHA-256 event hash checked against 48-hour window.
+- **Get Pixel Snippet:** `GET /api/v1/chatgpt-ads/conversions/pixel`
+
+#### 3.7.6 AI Optimization & Monitoring
+- **List Recommendations:** `GET /api/v1/chatgpt-ads/recommendations`
+- **Generate Recommendations:** `POST /api/v1/chatgpt-ads/recommendations`
+- **Approve Recommendation:** `POST /api/v1/chatgpt-ads/recommendations/[id]/approve`
+- **Reject Recommendation:** `POST /api/v1/chatgpt-ads/recommendations/[id]/reject`
+- **Apply Recommendation:** `POST /api/v1/chatgpt-ads/recommendations/[id]/apply`
+- **Monitoring Health:** `GET /api/v1/chatgpt-ads/monitoring`
+- **Alerts Feed:** `GET /api/v1/chatgpt-ads/alerts` & `PATCH /api/v1/chatgpt-ads/alerts/[id]`
+- **Sync Runs:** `GET /api/v1/chatgpt-ads/sync-runs` & `POST /api/v1/chatgpt-ads/sync`
 
 ---
 

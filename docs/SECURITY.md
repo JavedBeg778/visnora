@@ -198,21 +198,83 @@ Visnora applies standard HTTP security headers via Next.js configuration:
 - On-demand prompt execution: **10 runs / minute / tenant**.
 - Authentication endpoints: **5 attempts / 15 minutes / IP**.
 
+### 7.4 Server-Side Request Forgery (SSRF) Protection & URL Validation
+Visnora ingests brand websites, competitor domains, and citation references. To protect backend microservices, Redis queues, and cloud infrastructure against SSRF probing:
+1. **Scheme Whitelist**: Only `http:` and `https:` protocols are accepted. Dangerous schemes (`javascript:`, `data:`, `file:`, `ftp:`) are strictly rejected.
+2. **Private Address Filtering**: Every URL undergoes DNS and string pattern validation rejecting:
+   - Loopback addresses (`127.0.0.0/8`, `::1`, `localhost`).
+   - Private IP networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`).
+   - Cloud instance metadata IP addresses (`169.254.169.254`).
+   - Cloud metadata internal hostnames (`metadata.google.internal`, `instance-data`).
+3. **Structured Log Sanitization**: Sensitive credential keys (API keys, authorization bearer tokens, passwords) are automatically redacted in structured logger payloads (`packages/jobs/queues/tracking-queue.ts`).
+
+### 7.5 Ad Intelligence Privacy, Provenance & Non-Fabrication Standards (M5 Architecture)
+Visnora's Competitor Ad Intelligence module operates under strict data integrity and platform compliance rules:
+1. **Permitted Public Sources Only**: Public ad research exclusively queries sanctioned archives (Meta Ad Library Graph API, Google Ads Transparency Center, TikTok Creative Center, and user-submitted public landing pages). No illegal scraping, session hijacking, or CAPTCHA bypass is permitted.
+2. **Strict Non-Fabrication of Confidential Metrics**: Platform privacy policies strictly withhold commercial advertiser impressions, exact spend figures, and click-through rates. Visnora mathematically and architecturally prohibits hallucinating or synthesizing artificial performance metrics. All analytics represent verifiable creative attributes (copy, formats, positioning angles, hooks, and active promotional offers).
+3. **Cryptographic Deduplication**: Every ad record is hashed using SHA-256 canonical hashing across normalized advertiser, headline, copy, and CTA fields, preventing duplicate ingestion and ensuring immutable provenance.
+
 ---
 
-## 8. Privacy, Data Retention & Compliance
+## 8. Subscription & Payment Security (M4 Architecture)
 
-### 8.1 Regulatory Alignment
+Visnora implements a hardened, provider-independent billing security architecture:
+
+1. **Integer Monetary Precision**: All monetary values (plan prices, tax computations, invoice line items, payments) are strictly computed and stored as integer Paise (minor units). Floating-point arithmetic for currency is mathematically forbidden, eliminating fractional precision exploits and rounding leakage.
+2. **Production Mock Simulation Guard**: The `MockBillingProvider` incorporates explicit environment checks:
+   ```typescript
+   if (process.env.NODE_ENV === 'production' && process.env.ENABLE_MOCK_BILLING !== 'true') {
+     throw new ForbiddenError('Mock billing verification is disabled in production environments.');
+   }
+   ```
+   This ensures test mode cannot accidentally be triggered or exploited in live production environments.
+3. **Server-Side Quota & Entitlement Assertion**: All prompt executions, scheduled tracking runs, and premium capabilities (e.g., CSV/JSON export, white-label reports) are gated at the domain service layer. Frontend state is treated as untrusted presentation only.
+4. **Payment Idempotency**: Every payment transaction and usage ledger entry requires a unique `idempotencyKey` preventing accidental double-deductions, repeated card charges, or duplicate invoice emissions during network retries.
+5. **Zero Cardholder Data Exposure**: Visnora never stores, transmits, or logs credit card numbers (PANs), CVVs, or card expiration dates. Future gateway integrations rely exclusively on hosted tokenization.
+
+---
+
+## 9. Privacy, Data Retention & Compliance
+
+### 9.1 Regulatory Alignment
 - **Digital Personal Data Protection Act, 2023 (DPDP, India)**: Visnora complies with data fiduciary obligations, transparent consent notices, purpose limitation, and user-initiated erasure.
 - **GDPR & CCPA**: User data deletion mechanisms, exportable CSV summaries, cookie consent banners.
 
-### 8.2 Data Minimization & Deletion Policy
+### 9.2 Data Minimization & Deletion Policy
 - **No Consumer AI Data Collection**: Visnora strictly dispatches programmatic, marketing-related benchmark prompts. It never collects consumer chat logs or personal PII from AI engine users.
 - **Self-Service Erasure**: When a tenant deletes a project or workspace, associated prompt runs, raw AI responses, extracted mentions, and ad snapshots are hard-deleted from PostgreSQL within 7 business days.
 
 ---
 
-## 9. Incident Response & Breach Protocol
+## 10. OpenAI Ads Credential Vault & ChatGPT Ads Security Architecture (M6 Architecture)
+
+Visnora integrates authorized customer advertiser accounts with OpenAI Ads (`https://api.ads.openai.com`) under strict zero-trust security and financial safety protocols:
+
+### 10.1 AES-256-GCM Credential Vaulting
+1. **Authenticated Encryption**: All external advertiser API tokens and keys are encrypted at rest using AES-256-GCM (`packages/integrations/openai-ads/credential-vault.ts`).
+2. **Cryptographic Nonce & Tag Separation**: Each secret is encrypted with a cryptographically secure random 12-byte initialization vector (IV) and produces a 16-byte authentication tag (`authTag`). Any tampering or byte corruption of ciphertext immediately fails decryption with an integrity exception.
+3. **Master Key Governance**: Vault encryption derives from a dedicated `ADS_VAULT_MASTER_KEY` environment secret, isolated from database access credentials and standard session secrets. Key derivation requires 32 bytes (256 bits).
+4. **Zero-Downtime Key Rotation**: The vault supports atomic key rotation (`rotateCredentialKey`), re-encrypting credentials with a newly generated or updated master key while maintaining continuous service availability.
+
+### 10.2 Secret Scrubbing & Masking
+1. **Log & Transport Redaction**: Raw OpenAI Ads API keys and authorization tokens are strictly forbidden in persistent logs, error traces, and API response bodies.
+2. **Canonical Scrubbing Utility**: The `scrubAdsApiKey` function automatically redacts keys to safe display fingerprints:
+   - Example: `sk-ads-live-9876543210abcdef` → `sk-ads-****cdef` (key length and prefix preserved for diagnostics, secret material completely eliminated).
+3. **Database Isolation**: The `chatgpt_ads_credentials` table stores only ciphertext, IV, and auth tag; plaintext is never stored or cached in unencrypted tables.
+
+### 10.3 Bounded Financial Safety Standards
+To eliminate accidental financial liability or runaway ad spend:
+1. **Strict Default `PAUSED` State**: All newly created campaigns programmatically default to `status: 'PAUSED'`. The OpenAI Ads client and Visnora domain service strictly enforce this constraint.
+2. **Mandatory Financial Confirmation Barrier**: Activating or resuming a campaign, or altering its daily budget, requires explicit affirmative confirmation (`financialConfirmation: true`). Requests without explicit confirmation are rejected with HTTP 400.
+3. **Two-Man / Approval Workflow for AI Recommendations**: Optimization recommendations generated by the 12-dimension AI engine are in `PENDING` state by default. They can only be executed when an authorized organization admin explicitly approves and triggers the application.
+
+### 10.4 Conversion Integrity & Strict Non-Fabrication Standards
+1. **48-Hour Rolling SHA-256 Event Deduplication**: Conversion events from both the Measurement Pixel and Conversions API (CAPI) are fingerprinted using canonical SHA-256 hashing across `[account_id, event_name, event_time, user_data_hash]`. Duplicate transmissions within a 48-hour window are silently deduplicated, preventing inflated conversion figures.
+2. **Strict Non-Fabrication of Delayed Metrics**: OpenAI Ads conversion and performance attribution operates with known reporting latency (freshness windows). Visnora strictly reports `delayed_data_status: 'DELAYED'` or `'PENDING'` during open attribution windows and never synthesizes or fabricates zero or estimated conversions.
+
+---
+
+## 11. Incident Response & Breach Protocol
 
 | Severity | Event Type | Initial Response Action (< 1 Hour) |
 | :--- | :--- | :--- |
@@ -222,7 +284,7 @@ Visnora applies standard HTTP security headers via Next.js configuration:
 
 ---
 
-## 10. Cross-Reference Navigation
+## 12. Cross-Reference Navigation
 - **Product Requirements**: [PRD.md](file:///D:/react-native/VISNORA/docs/PRD.md)
 - **Technical Blueprint**: [TECHNICAL_BLUEPRINT.md](file:///D:/react-native/VISNORA/docs/TECHNICAL_BLUEPRINT.md)
 - **Architecture Specification**: [ARCHITECTURE.md](file:///D:/react-native/VISNORA/docs/ARCHITECTURE.md)

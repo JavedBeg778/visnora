@@ -1,0 +1,100 @@
+{
+  "description": "M3 Intelligence Regression Test Suite — Brand Mention, Sentiment, and Citation Evaluation",
+  "version": "1.0.0",
+  "targetBrand": {
+    "id": "378a8ff5-60e2-4908-8705-dcd28c70d3ab",
+    "canonicalName": "Zomato",
+    "domain": "zomato.com",
+    "aliases": ["Zomato Gold", "Zomato Delivery", "Zomato App"]
+  },
+  "competitors": [
+    {
+      "id": "comp-swiggy",
+      "canonicalName": "Swiggy",
+      "domain": "swiggy.com",
+      "aliases": ["Swiggy One", "Swiggy Instamart"]
+    },
+    {
+      "id": "comp-eatsure",
+      "canonicalName": "EatSure",
+      "domain": "eatsure.com",
+      "aliases": []
+    },
+    {
+      "id": "comp-magicpin",
+      "canonicalName": "Magicpin",
+      "domain": "magicpin.in",
+      "aliases": []
+    }
+  ],
+  "cases": [
+    {
+      "id": "case-exact-and-alias",
+      "description": "Detects exact canonical brand and alias names accurately",
+      "text": "When ordering food online, Zomato is a leading choice. Many customers also use Zomato Gold for dining benefits, while Swiggy offers Swiggy One.",
+      "expectedMentions": [
+        { "entityName": "Zomato", "isPrimaryBrand": true, "confidenceTier": "HIGH" },
+        { "entityName": "Swiggy", "isPrimaryBrand": false, "confidenceTier": "HIGH" }
+      ]
+    },
+    {
+      "id": "case-ambiguous-words-suppression",
+      "description": "Suppresses false positives when dictionary words match brand substrings or lowercase words without proper context",
+      "text": "Make sure you eat your food quickly and pin the location on the map. Apple pie is good.",
+      "expectedMentions": []
+    },
+    {
+      "id": "case-compound-brand-detection",
+      "description": "Correctly detects EatSure and Magicpin despite containing ambiguous substrings (eat, sure, pin)",
+      "text": "EatSure provides food from multiple brands, whereas Magicpin focuses on local savings and dining vouchers.",
+      "expectedMentions": [
+        { "entityName": "EatSure", "isPrimaryBrand": false, "confidenceTier": "HIGH" },
+        { "entityName": "Magicpin", "isPrimaryBrand": false, "confidenceTier": "HIGH" }
+      ]
+    },
+    {
+      "id": "case-negated-sentiment",
+      "description": "Flips positive keywords when preceded by negation into negative sentiment",
+      "text": "We cannot recommend Zomato because the customer service is not helpful and deliveries are rarely on time.",
+      "targetEntity": "Zomato",
+      "expectedSentiment": "NEGATIVE"
+    },
+    {
+      "id": "case-positive-sentiment",
+      "description": "Correctly detects positive sentiment with strong praise",
+      "text": "Zomato is exceptional and delivers outstanding customer satisfaction with great reliability.",
+      "targetEntity": "Zomato",
+      "expectedSentiment": "POSITIVE"
+    },
+    {
+      "id": "case-comparison-sentiment",
+      "description": "Detects comparison context when one brand is compared against another with trade-offs",
+      "text": "Zomato outperforms Swiggy in restaurant variety, but lags behind in delivery speed.",
+      "expectedComparisons": true
+    },
+    {
+      "id": "case-citation-normalization-association",
+      "description": "Strips tracking parameters and classifies citation association properly",
+      "citations": [
+        {
+          "raw": "https://www.zomato.com/order?utm_source=google&utm_medium=cpc&gclid=12345&campaign_id=987#menu",
+          "expectedDomain": "zomato.com",
+          "expectedClean": "https://zomato.com/order",
+          "expectedAssociation": "PRIMARY_BRAND"
+        },
+        {
+          "raw": "https://swiggy.com/restaurants?ref=affiliate&_ga=1.2.3&yclid=998877",
+          "expectedDomain": "swiggy.com",
+          "expectedClean": "https://swiggy.com/restaurants",
+          "expectedAssociation": "COMPETITOR"
+        },
+        {
+          "raw": "https://techcrunch.com/2026/food-delivery-wars?utm_content=footer",
+          "expectedDomain": "techcrunch.com",
+          "expectedClean": "https://techcrunch.com/2026/food-delivery-wars",
+          "expectedAssociation": "THIRD_PARTY"
+        }
+      ]
+    }
+  ]
+}

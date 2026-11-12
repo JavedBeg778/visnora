@@ -21,6 +21,7 @@ import {
   ArrowUpRight,
   Layers,
   HelpCircle,
+  Download,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -322,6 +323,21 @@ export function DashboardClient({
               </button>
             ))}
           </div>
+
+          <button
+            onClick={() => {
+              const brandParam = selectedBrandId ? `&brandId=${encodeURIComponent(selectedBrandId)}` : '';
+              window.open(
+                `/api/v1/analytics/report?projectId=${selectedProjectId}${brandParam}&days=${days}&format=csv`,
+                '_blank'
+              );
+            }}
+            title="Download Pilot Intelligence CSV Report"
+            className="inline-flex items-center text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 transition-colors shadow-subtle cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5 text-slate-600" />
+            <span>Export Report</span>
+          </button>
 
           <Button
             size="sm"

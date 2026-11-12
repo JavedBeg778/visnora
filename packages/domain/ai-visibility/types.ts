@@ -6,7 +6,13 @@ export interface BrandEntity {
   canonicalName: string;
   domain: string;
   aliases: string[];
+  productsServices?: string[];
+  brandKeywords?: string[];
 }
+
+export type DetectionMethod = 'EXACT_NAME' | 'ALIAS' | 'DOMAIN' | 'PRODUCT_SERVICE' | 'CONTEXTUAL';
+export type AnalysisMethod = 'DETERMINISTIC_HEURISTIC' | 'LLM_ASSISTED';
+export type ConfidenceTier = 'HIGH' | 'MEDIUM' | 'LOW';
 
 export interface ExtractedMention {
   matchedEntityId: string;
@@ -17,9 +23,14 @@ export interface ExtractedMention {
   evidenceText: string;
   listPosition: number | null;
   confidence: number;
+  confidenceTier: ConfidenceTier;
+  detectionMethod: DetectionMethod;
+  analysisMethod: AnalysisMethod;
   sentiment?: SentimentType;
   sentimentConfidence?: number;
   isRecommendation?: boolean;
+  isComparison?: boolean;
+  matchedTerm?: string;
 }
 
 export interface ExtractedCitation {
@@ -27,6 +38,8 @@ export interface ExtractedCitation {
   domain: string;
   order: number;
   anchorText?: string;
+  association?: 'PRIMARY_BRAND' | 'COMPETITOR' | 'THIRD_PARTY';
+  associatedEntityId?: string;
 }
 
 export interface MetricSummary {
@@ -42,4 +55,5 @@ export interface MetricSummary {
   competitorMentionsCount: number;
   sampleDenominatorNotice: string;
 }
+
 

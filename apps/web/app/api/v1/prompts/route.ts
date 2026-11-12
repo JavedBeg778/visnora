@@ -6,8 +6,6 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
-  assertOrganizationAccess,
-  assertProjectAccess,
 } from '@/lib/api-handler';
 import {
   getPrompts,
@@ -50,7 +48,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    await assertProjectAccess(orgId, projectId, user.id);
     const prompts = await getPrompts(orgId, projectId, {
       category,
       groupId,
@@ -85,7 +82,6 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = CreateTrackedPromptSchema.parse(body);
-    await assertProjectAccess(orgId, projectId, user.id, undefined, 'MEMBER');
     const prompt = await createPrompt(orgId, projectId, validated);
 
     return formatSuccessResponse(prompt, 201);

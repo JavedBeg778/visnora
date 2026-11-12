@@ -22,6 +22,14 @@ import {
   Clock,
   X,
   ShieldCheck,
+  CreditCard,
+  Megaphone,
+  Layers,
+  Compass,
+  Columns,
+  Radio,
+  Target,
+  Bot,
 } from 'lucide-react';
 import { cn } from '../ui/button';
 
@@ -51,9 +59,31 @@ export function Sidebar({
     { name: 'Recommendations', href: '/recommendations', icon: Lightbulb },
   ];
 
+  const adIntelligenceNav = [
+    { name: 'Ad Intelligence Hub', href: '/ads', icon: Megaphone },
+    { name: 'Ad Library', href: '/ads/library', icon: Layers },
+    { name: 'Discover Ads', href: '/ads/discover', icon: Compass },
+    { name: 'Competitor Ads', href: '/ads/competitors', icon: Target },
+    { name: 'Ad Comparison', href: '/ads/compare', icon: Columns },
+    { name: 'Ad Recommendations', href: '/ads/recommendations', icon: Lightbulb },
+    { name: 'Ad Monitoring', href: '/ads/monitoring', icon: Radio },
+  ];
+
+  const chatgptAdsNav = [
+    { name: 'ChatGPT Ads Hub', href: '/chatgpt-ads', icon: Bot },
+    { name: 'Campaigns', href: '/chatgpt-ads/campaigns', icon: Layers },
+    { name: 'Creative Studio', href: '/chatgpt-ads/creative-studio', icon: Sparkles },
+    { name: 'Analytics & Insights', href: '/chatgpt-ads/analytics', icon: BarChart3 },
+    { name: 'Conversions (CAPI)', href: '/chatgpt-ads/conversions', icon: Target },
+    { name: 'AI Optimization', href: '/chatgpt-ads/optimization', icon: Lightbulb },
+    { name: 'Monitoring & Health', href: '/chatgpt-ads/monitoring', icon: Radio },
+    { name: 'Ads Settings', href: '/chatgpt-ads/settings', icon: Settings },
+  ];
+
   const adminNav = [
     { name: 'Projects', href: '/projects', icon: FolderKanban },
     { name: 'Workspaces', href: '/workspaces', icon: Briefcase },
+    { name: 'Billing & Plans', href: '/billing', icon: CreditCard },
     { name: 'Tracking Schedule', href: '/settings/tracking', icon: Clock },
     { name: 'Team & Access', href: '/team', icon: Users },
     { name: 'Settings', href: '/settings', icon: Settings },
@@ -141,6 +171,96 @@ export function Sidebar({
                     <span>{item.name}</span>
                   </div>
                   {isActive && <ChevronRight className="h-3.5 w-3.5 text-blue-600" />}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
+            <Megaphone className="h-3 w-3 text-blue-500" />
+            <span>Ad Intelligence</span>
+          </div>
+          <div className="mt-1 space-y-0.5">
+            {adIntelligenceNav.map((item) => {
+              const isActive =
+                item.href === '/ads'
+                  ? pathname === '/ads'
+                  : pathname.startsWith(item.href);
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  prefetch={false}
+                  onClick={onClose}
+                  className={cn(
+                    'group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all relative',
+                    isActive
+                      ? 'bg-blue-50 text-blue-700 font-semibold'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  )}
+                >
+                  {isActive && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-blue-600 rounded-r-full" />
+                  )}
+                  <div className="flex items-center space-x-2.5">
+                    <Icon
+                      className={cn(
+                        'h-4 w-4 flex-shrink-0 transition-colors',
+                        isActive ? 'text-blue-600' : 'text-slate-400 group-hover:text-slate-700'
+                      )}
+                    />
+                    <span>{item.name}</span>
+                  </div>
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 text-blue-600" />}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <div className="px-3 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center space-x-1.5">
+            <Bot className="h-3 w-3 text-emerald-600" />
+            <span>ChatGPT Ads</span>
+          </div>
+          <div className="mt-1 space-y-0.5">
+            {chatgptAdsNav.map((item) => {
+              const isActive =
+                item.href === '/chatgpt-ads'
+                  ? pathname === '/chatgpt-ads'
+                  : pathname.startsWith(item.href);
+              const Icon = item.icon;
+
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  prefetch={false}
+                  onClick={onClose}
+                  className={cn(
+                    'group flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all relative',
+                    isActive
+                      ? 'bg-emerald-50 text-emerald-800 font-semibold'
+                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                  )}
+                >
+                  {isActive && (
+                    <span className="absolute left-0 top-1.5 bottom-1.5 w-1 bg-emerald-600 rounded-r-full" />
+                  )}
+                  <div className="flex items-center space-x-2.5">
+                    <Icon
+                      className={cn(
+                        'h-4 w-4 flex-shrink-0 transition-colors',
+                        isActive ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-700'
+                      )}
+                    />
+                    <span>{item.name}</span>
+                  </div>
+                  {isActive && <ChevronRight className="h-3.5 w-3.5 text-emerald-600" />}
                 </Link>
               );
             })}

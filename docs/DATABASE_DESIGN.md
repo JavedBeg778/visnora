@@ -467,30 +467,58 @@ CREATE INDEX idx_public_ad_advertiser ON public_ad_observations(advertiser_name)
 
 ---
 
-### 3.5 Billing, Subscriptions & Metering Tables
+### 3.5 Billing, Subscriptions & Metering Tables (Extended in M4)
 
-#### `subscriptions` (Razorpay Subscription State)
+#### `subscription_plans` (Tier Definition & Pricing Catalog)
 ```sql
-CREATE TYPE sub_status AS ENUM ('TRIAL', 'ACTIVE', 'PAST_DUE', 'CANCELLED', 'PAUSED');
+CREATE TABLE subscription_plans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug VARCHAR(50) UNIQUE NOT NULL, -- 'free', 'starter', 'pro', 'agency'
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    monthly_price_paise INT NOT NULL DEFAULT 0,
+    annual_price_paise INT NOT NULL DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
+    prompt_runs_limit INT NOT NULL DEFAULT 100,
+    brand_limit INT NOT NULL DEFAULT 1,
+    workspace_limit INT NOT NULL DEFAULT 1,
+    competitor_limit INT NOT NULL DEFAULT 3,
+    features TEXT[] NOT NULL DEFAULT '{}',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    trial_days INT NOT NULL DEFAULT 14,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+#### `subscriptions` (Subscription Lifecycle & Provider State)
+```sql
+CREATE TYPE sub_status AS ENUM ('TRIAL', 'ACTIVE', 'PAST_DUE', 'CANCELLED', 'PAUSED', 'EXPIRED', 'SUSPENDED');
 
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     organization_id UUID UNIQUE NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    plan_id UUID REFERENCES subscription_plans(id) ON DELETE SET NULL,
     plan_tier VARCHAR(50) NOT NULL DEFAULT 'STARTER', -- 'FREE', 'STARTER', 'PRO', 'AGENCY'
-    billing_cycle VARCHAR(20) NOT NULL DEFAULT 'MONTHLY',
+    billing_cycle VARCHAR(20) NOT NULL DEFAULT 'MONTHLY', -- 'MONTHLY', 'ANNUAL'
     status sub_status NOT NULL DEFAULT 'TRIAL',
     razorpay_customer_id VARCHAR(255),
     razorpay_subscription_id VARCHAR(255) UNIQUE,
     current_period_start TIMESTAMPTZ NOT NULL,
     current_period_end TIMESTAMPTZ NOT NULL,
     cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+    canceled_at TIMESTAMPTZ,
+    effective_cancellation_date TIMESTAMPTZ,
+    trial_ends_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_subscriptions_org ON subscriptions(organization_id);
+CREATE INDEX idx_subscriptions_plan ON subscriptions(plan_id);
 ```
 
-#### `usage_counters` (Plan Quotas & Incurred Usage)
+#### `usage_counters` (Plan Quotas & Atomic Reservation)
 ```sql
 CREATE TABLE usage_counters (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -499,6 +527,7 @@ CREATE TABLE usage_counters (
     period_end TIMESTAMPTZ NOT NULL,
     prompt_runs_used INT NOT NULL DEFAULT 0,
     prompt_runs_limit INT NOT NULL DEFAULT 100,
+    prompt_runs_reserved INT NOT NULL DEFAULT 0,
     ad_syncs_used INT NOT NULL DEFAULT 0,
     ad_syncs_limit INT NOT NULL DEFAULT 30,
     active_projects_count INT NOT NULL DEFAULT 1,
@@ -508,6 +537,73 @@ CREATE TABLE usage_counters (
     CONSTRAINT uq_org_period UNIQUE (organization_id, period_start)
 );
 CREATE INDEX idx_usage_counters_lookup ON usage_counters(organization_id, period_start);
+```
+
+#### `usage_records` (Immutable Metering Ledger)
+```sql
+CREATE TABLE usage_records (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    usage_type VARCHAR(50) NOT NULL DEFAULT 'PROMPT_RUN',
+    quantity INT NOT NULL DEFAULT 1,
+    prompt_run_id UUID,
+    tracking_run_id UUID,
+    idempotency_key VARCHAR(255) UNIQUE,
+    period_start TIMESTAMPTZ NOT NULL,
+    period_end TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_usage_records_org_period ON usage_records(organization_id, period_start);
+CREATE INDEX idx_usage_records_tracking_run ON usage_records(tracking_run_id);
+```
+
+#### `invoices` (Tax Invoices & GST Breakdown)
+```sql
+CREATE TABLE invoices (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    subscription_id UUID REFERENCES subscriptions(id) ON DELETE SET NULL,
+    invoice_number VARCHAR(100) UNIQUE NOT NULL, -- 'VIS-2026-00001'
+    subtotal_paise INT NOT NULL DEFAULT 0,
+    tax_paise INT NOT NULL DEFAULT 0,
+    total_paise INT NOT NULL DEFAULT 0,
+    tax_rate_percent DECIMAL(5,2) NOT NULL DEFAULT 18.00,
+    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
+    status VARCHAR(50) NOT NULL DEFAULT 'PAID', -- 'PAID', 'PENDING', 'VOID', 'REFUNDED'
+    period_start TIMESTAMPTZ NOT NULL,
+    period_end TIMESTAMPTZ NOT NULL,
+    customer_name VARCHAR(255),
+    customer_email VARCHAR(255),
+    customer_address TEXT,
+    customer_gstin VARCHAR(50),
+    pdf_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_invoices_org ON invoices(organization_id);
+```
+
+#### `payments` (Payment Transaction History)
+```sql
+CREATE TABLE payments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subscription_id UUID NOT NULL REFERENCES subscriptions(id) ON DELETE CASCADE,
+    organization_id UUID REFERENCES organizations(id) ON DELETE SET NULL,
+    invoice_id UUID REFERENCES invoices(id) ON DELETE SET NULL,
+    provider VARCHAR(50) NOT NULL DEFAULT 'mock', -- 'mock', 'razorpay'
+    razorpay_payment_id VARCHAR(255) UNIQUE,
+    provider_payment_id VARCHAR(255),
+    idempotency_key VARCHAR(255) UNIQUE,
+    amount_paise BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'INR',
+    status VARCHAR(50) NOT NULL, -- 'captured', 'failed', 'refunded', 'pending'
+    payment_method VARCHAR(50),
+    failure_reason TEXT,
+    invoice_url TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_payments_sub ON payments(subscription_id);
+CREATE INDEX idx_payments_org ON payments(organization_id);
 ```
 
 #### `webhook_events` (Idempotent Webhook Log)
@@ -610,6 +706,48 @@ CREATE POLICY org_isolation_prompts_policy ON tracked_prompts
   - `public.is_org_admin(target_org_id UUID)`
   - `public.is_org_owner(target_org_id UUID)`
   - RLS policies applied to `organizations`, `organization_members`, `workspaces`, `projects`, `invitations`, and `user_profiles`.
+
+### 5.2 Milestone M5 Competitor Ad Intelligence Extensions
+- **Migration Location**: `packages/database/prisma/migrations/20261112_m5_ad_intelligence/migration.sql`
+- **Extended Enums**:
+  - `AdPlatform`: Added `'TIKTOK_ADS'`, `'MANUAL'`, `'OTHER'`.
+  - Added enums: `AdSourceType` (`META_AD_LIBRARY`, `GOOGLE_ADS_TRANSPARENCY`, `TIKTOK_CREATIVE_CENTER`, `MANUAL_SUBMISSION`), `AdFormat` (`IMAGE`, `VIDEO`, `CAROUSEL`, `TEXT`, `UNKNOWN`), `AdStatus` (`ACTIVE`, `INACTIVE`, `UNKNOWN`, `REMOVED`).
+- **New Tables**:
+  - `ad_sources`: Configured ad research sources.
+  - `ad_records`: Core normalized ad records with canonical SHA-256 `content_hash` and unique index on `[organization_id, platform, external_ad_id]`.
+  - `ad_creatives`: Individual media creative assets (Image, Video, Carousel, Text).
+  - `ad_landing_pages`: Extracted destination URLs, normalized domain, status, and detected offers.
+  - `ad_snapshots`: Point-in-time creative captures for change detection.
+  - `ad_analyses`: 12-dimension AI strategic and positioning analyses with token and cost accounting in Paise.
+  - `ad_monitoring_jobs`: Automated scheduled recurring competitor checks.
+  - `ad_change_events`: Historical audit log of detected modifications (`NEW_AD`, `HEADLINE_CHANGED`, `TEXT_CHANGED`, `CTA_CHANGED`, `LANDING_PAGE_CHANGED`, `REMOVED`).
+  - `ad_comparisons`: Persisted side-by-side multi-ad comparisons with synthesized AI summaries.
+  - `ad_recommendations`: Actionable evidence-backed recommendations across 9 marketing categories.
+  - `ad_collection_runs`: Ingestion pipeline execution history.
+
+### 5.3 Milestone M6 ChatGPT Ads Intelligence Extensions
+- **Migration Location**: `packages/database/prisma/migrations/20261112_m6_chatgpt_ads/migration.sql`
+- **Architectural Scope**: Integration with OpenAI Ads API (`https://api.ads.openai.com`), AES-256-GCM credential vaulting, conversational ad preview & generation, conversion tracking (Pixel & CAPI), and 12-dimension AI optimization engine.
+- **Extended Enums**:
+  - `ChatGPTAdsCampaignStatus`: `'PAUSED'`, `'ACTIVE'`, `'COMPLETED'`, `'ARCHIVED'`. Strict safety default is `'PAUSED'`.
+  - `ChatGPTAdsAdStatus`: `'PAUSED'`, `'ACTIVE'`, `'PENDING_REVIEW'`, `'DISAPPROVED'`, `'ARCHIVED'`.
+  - `ChatGPTAdsSyncStatus`: `'SUCCESS'`, `'PARTIAL'`, `'FAILED'`, `'IN_PROGRESS'`.
+  - `ChatGPTAdsRecStatus`: `'PENDING'`, `'APPROVED'`, `'APPLIED'`, `'REJECTED'`.
+  - `ChatGPTAdsRecDimension`: 12 dimensions: `'BID_STRATEGY'`, `'BUDGET_REALLOCATION'`, `'TARGETING_EXPANSION'`, `'CONTEXT_HINT_OPTIMIZATION'`, `'KEYWORD_EXCLUSION'`, `'CREATIVE_REFRESH'`, `'HEADLINE_VARIATION'`, `'CTA_TUNING'`, `'CONVERSION_RATE_OPTIMIZATION'`, `'AD_SCHEDULE'`, `'AUDIENCE_SEGMENTATION'`, `'ANOMALY_CORRECTION'`.
+- **New Tables (13 Total)**:
+  1. `chatgpt_ads_accounts`: Authorized OpenAI Ads advertiser accounts (`id`, `organization_id`, `openai_account_id`, `account_name`, `currency`, `timezone`, `status`, `last_sync_at`, `data_freshness_info`).
+  2. `chatgpt_ads_credentials`: Encrypted credential vault (`id`, `organization_id`, `account_id`, `encrypted_access_token`, `key_fingerprint`, `iv`, `auth_tag`, `last_rotated_at`, `expires_at`).
+  3. `chatgpt_ads_campaigns`: ChatGPT advertising campaigns (`id`, `organization_id`, `account_id`, `openai_campaign_id`, `name`, `status`, `budget_amount_paise`, `currency`, `start_date`, `end_date`, `targeting_config`).
+  4. `chatgpt_ads_ad_groups`: Context-targeted conversational ad groups (`id`, `organization_id`, `campaign_id`, `openai_ad_group_id`, `name`, `status`, `bid_amount_paise`, `context_hints`, `audience_config`).
+  5. `chatgpt_ads_ads`: Individual conversational ads (`id`, `organization_id`, `ad_group_id`, `openai_ad_id`, `headline`, `ad_copy`, `advertiser_name`, `destination_url`, `display_url`, `call_to_action`, `status`).
+  6. `chatgpt_ads_assets`: Creative media, brand cards, logos (`id`, `organization_id`, `account_id`, `openai_asset_id`, `asset_type`, `asset_url`, `content_hash`, `file_size_bytes`, `mime_type`).
+  7. `chatgpt_ads_insights`: Time-series performance metrics with delayed data tracking (`id`, `organization_id`, `account_id`, `campaign_id`, `ad_group_id`, `ad_id`, `date`, `impressions`, `clicks`, `spend_paise`, `conversions`, `delayed_data_status`).
+  8. `chatgpt_ads_conversions`: Measurement pixel & CAPI conversion registry (`id`, `organization_id`, `account_id`, `event_name`, `event_source`, `event_time`, `dedup_key` [48hr SHA-256], `value_paise`, `currency`, `user_data_hash`).
+  9. `chatgpt_ads_events`: Live event ingestion audit log for pixel & server-side diagnostics (`id`, `organization_id`, `conversion_id`, `event_type`, `raw_payload`, `received_at`).
+  10. `chatgpt_ads_sync_runs`: Remote sync execution ledger (`id`, `organization_id`, `account_id`, `sync_type`, `status`, `records_synced`, `error_details`, `started_at`, `completed_at`).
+  11. `chatgpt_ads_recommendations`: 12-dimension AI optimization engine recommendations (`id`, `organization_id`, `account_id`, `campaign_id`, `dimension`, `title`, `description`, `action_payload`, `status`, `applied_at`).
+  12. `chatgpt_ads_alerts`: Anomaly detection and threshold alert feed (`id`, `organization_id`, `account_id`, `severity`, `title`, `message`, `is_acknowledged`, `created_at`).
+  13. `chatgpt_ads_audit_logs`: Immutable security audit log for all credential, campaign, and financial actions (`id`, `organization_id`, `user_id`, `action`, `resource_type`, `resource_id`, `details`, `ip_address`, `created_at`).
 
 ---
 

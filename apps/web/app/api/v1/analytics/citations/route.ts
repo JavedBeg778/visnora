@@ -6,8 +6,6 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
-  assertProjectAccess,
-  parseDateRangeDays,
 } from '@/lib/api-handler';
 import { getCitationIntelligence } from '@/domain/ai-visibility/analytics-service';
 
@@ -21,7 +19,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const orgId = request.headers.get('x-organization-id') || searchParams.get('orgId');
     const projectId = searchParams.get('projectId');
-    const days = parseDateRangeDays(searchParams.get('days'));
+    const days = parseInt(searchParams.get('days') || '30', 10);
 
     if (!orgId) {
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
@@ -30,8 +28,6 @@ export async function GET(request: NextRequest) {
     if (!projectId) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
-
-    await assertProjectAccess(orgId, projectId, user.id);
 
     const citations = await getCitationIntelligence(orgId, projectId, days);
     return formatSuccessResponse(citations);

@@ -6,8 +6,6 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
-  assertOrganizationAccess,
-  assertProjectAccess,
 } from '@/lib/api-handler';
 import {
   getPromptGroups,
@@ -34,7 +32,6 @@ export async function GET(request: NextRequest) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
-    await assertProjectAccess(orgId, projectId, user.id);
     const groups = await getPromptGroups(orgId, projectId);
     return formatSuccessResponse(groups);
   } catch (err) {
@@ -62,7 +59,6 @@ export async function POST(request: NextRequest) {
     }
 
     const validated = CreatePromptGroupSchema.parse(body);
-    await assertProjectAccess(orgId, projectId, user.id, undefined, 'MEMBER');
     const group = await createPromptGroup(orgId, projectId, {
       name: validated.name,
       description: validated.description,

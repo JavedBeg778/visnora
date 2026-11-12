@@ -1,7 +1,7 @@
 // Visnora — Citation Extraction & Domain Normalization Engine
-// Reference: docs/DATA_METHODOLOGY.md
+// Reference: docs/DATA_METHODOLOGY.md & M3.1 Intelligence Quality
 
-import { ExtractedCitation } from './types';
+import { ExtractedCitation, BrandEntity } from './types';
 
 // Tracking & analytics query parameters to strip
 const TRACKING_PARAMS = new Set([
@@ -17,6 +17,15 @@ const TRACKING_PARAMS = new Set([
   'ref_src',
   'mc_eid',
   'igshid',
+  'yclid',
+  '_ga',
+  'campaign_id',
+  'ad_id',
+  'source',
+  'affiliate_id',
+  'partner_id',
+  'dclid',
+  'twclid',
 ]);
 
 /**
@@ -24,15 +33,30 @@ const TRACKING_PARAMS = new Set([
  * - Strips marketing tracking query parameters.
  * - Removes trailing slashes and hash fragments.
  * - Extracts clean hostname / root domain.
+ * - Rejects malformed or unsafe URLs.
  */
 export function normalizeUrl(rawUrl: string): { cleanUrl: string; domain: string } | null {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+
   try {
     let urlString = rawUrl.trim();
+
+    // Reject obvious non-HTTP formats or garbage strings
+    if (/^(javascript|data|vbscript|file):/i.test(urlString)) {
+      return null;
+    }
+
     if (!/^https?:\/\//i.test(urlString)) {
       urlString = 'https://' + urlString;
     }
 
     const parsed = new URL(urlString);
+
+    // Hostname must contain at least one dot to be a valid web domain
+    if (!parsed.hostname || !parsed.hostname.includes('.')) {
+      return null;
+    }
+
     parsed.hostname = parsed.hostname.toLowerCase().replace(/^www\./, '');
 
     // Strip known tracking parameters
@@ -45,8 +69,13 @@ export function normalizeUrl(rawUrl: string): { cleanUrl: string; domain: string
     // Clear hash fragment
     parsed.hash = '';
 
-    // Remove trailing slash if path is just '/'
+    // Remove default ports if present
+    if (parsed.port === '80' || parsed.port === '443') {
+      parsed.port = '';
+    }
+
     let cleanUrl = parsed.toString();
+    // Normalize trailing slash if path is just '/'
     if (cleanUrl.endsWith('/') && parsed.pathname === '/') {
       cleanUrl = cleanUrl.slice(0, -1);
     }
@@ -59,6 +88,56 @@ export function normalizeUrl(rawUrl: string): { cleanUrl: string; domain: string
 }
 
 /**
+ * Associates extracted citations with target brand or competitors based on domain ownership.
+ */
+export function associateCitations(
+  citations: ExtractedCitation[],
+  targetBrand?: BrandEntity,
+  competitors?: BrandEntity[]
+): ExtractedCitation[] {
+  const brandDomain = targetBrand?.domain
+    ? targetBrand.domain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '')
+    : null;
+
+  const compDomainMap = new Map<string, string>();
+  if (competitors) {
+    for (const comp of competitors) {
+      if (comp.domain) {
+        const d = comp.domain.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
+        compDomainMap.set(d, comp.id);
+      }
+    }
+  }
+
+  return citations.map((citation) => {
+    const citDomain = citation.domain.toLowerCase();
+
+    if (brandDomain && (citDomain === brandDomain || citDomain.endsWith('.' + brandDomain))) {
+      return {
+        ...citation,
+        association: 'PRIMARY_BRAND' as const,
+        associatedEntityId: targetBrand?.id,
+      };
+    }
+
+    for (const [compDomain, compId] of compDomainMap.entries()) {
+      if (citDomain === compDomain || citDomain.endsWith('.' + compDomain)) {
+        return {
+          ...citation,
+          association: 'COMPETITOR' as const,
+          associatedEntityId: compId,
+        };
+      }
+    }
+
+    return {
+      ...citation,
+      association: 'THIRD_PARTY' as const,
+    };
+  });
+}
+
+/**
  * Extracts citations from:
  * 1. Structured Google Search Grounding metadata (URIs).
  * 2. Markdown links (`[Anchor](https://...)`) and bare URLs embedded in response text.
@@ -66,7 +145,9 @@ export function normalizeUrl(rawUrl: string): { cleanUrl: string; domain: string
  */
 export function extractCitations(
   rawText: string,
-  groundingSources?: Array<{ uri: string; title?: string }>
+  groundingSources?: Array<{ uri: string; title?: string }>,
+  targetBrand?: BrandEntity,
+  competitors?: BrandEntity[]
 ): ExtractedCitation[] {
   const citations: ExtractedCitation[] = [];
   const seenUrls = new Set<string>();
@@ -127,7 +208,7 @@ export function extractCitations(
     }
   }
 
-  return citations;
+  return associateCitations(citations, targetBrand, competitors);
 }
 
 /**

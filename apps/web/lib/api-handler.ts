@@ -7,6 +7,8 @@ import { createClient } from './supabase/server';
 import { assertPermission, ForbiddenError } from '@/shared/permissions/rbac';
 import type { OrgRole } from '@/shared/types/index';
 import { NotFoundError, ValidationError } from '@/domain/organizations/service';
+import { QuotaExceededError } from '@/domain/billing/usage-meter';
+import { EntitlementError } from '@/domain/billing/entitlements';
 import { prisma } from '@/database/src/client';
 
 export interface AuthenticatedUser {
@@ -39,11 +41,32 @@ export function formatErrorResponse(
   let status = defaultStatus;
   let code = defaultCode;
   let message = defaultMessage;
+  let details: any = undefined;
 
   if (error instanceof ForbiddenError) {
     status = 403;
     code = 'FORBIDDEN';
     message = error.message;
+  } else if (error instanceof QuotaExceededError) {
+    status = 402;
+    code = 'QUOTA_EXCEEDED';
+    message = error.message;
+    details = {
+      currentUsage: error.currentUsage,
+      maxAllowed: error.maxAllowed,
+      remaining: error.remaining,
+      resetDate: error.resetDate,
+      upgradeUrl: '/billing/pricing',
+    };
+  } else if (error instanceof EntitlementError) {
+    status = 403;
+    code = 'ENTITLEMENT_REQUIRED';
+    message = error.message;
+    details = {
+      feature: error.featureKey,
+      requiredPlan: error.requiredPlan,
+      upgradeUrl: '/billing/pricing',
+    };
   } else if (error instanceof NotFoundError) {
     status = 404;
     code = 'NOT_FOUND';
@@ -63,7 +86,8 @@ export function formatErrorResponse(
         code,
         message,
         traceId,
-        },
+        ...(details ? { details } : {}),
+      },
     },
     { status }
   );
@@ -117,7 +141,6 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<Authen
 
   return null;
 }
-
 
 /**
  * Validates that the authenticated user is an active member of the requested

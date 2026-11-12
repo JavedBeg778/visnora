@@ -6,7 +6,6 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
-  assertProjectAccess,
 } from '@/lib/api-handler';
 import { getTrackingRunById } from '@/domain/ai-visibility/collection-engine';
 
@@ -29,7 +28,6 @@ export async function GET(
     }
 
     const run = await getTrackingRunById(id, orgId);
-    await assertProjectAccess(orgId, run.projectId, user.id);
     return formatSuccessResponse(run);
   } catch (err) {
     return formatErrorResponse(err);

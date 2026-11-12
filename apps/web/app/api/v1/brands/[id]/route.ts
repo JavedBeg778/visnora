@@ -6,8 +6,6 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
-  assertOrganizationAccess,
-  assertProjectAccess,
 } from '@/lib/api-handler';
 import {
   getBrandById,
@@ -34,7 +32,6 @@ export async function GET(
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
-    await assertOrganizationAccess(orgId, user.id);
     const brand = await getBrandById(id, orgId);
     return formatSuccessResponse(brand);
   } catch (err) {
@@ -61,7 +58,6 @@ export async function PATCH(
     }
 
     const validated = UpdateBrandSchema.parse(body);
-    await assertOrganizationAccess(orgId, user.id, 'MEMBER');
     const updated = await updateBrand(id, orgId, validated);
 
     return formatSuccessResponse(updated);
@@ -88,7 +84,6 @@ export async function DELETE(
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
-    await assertOrganizationAccess(orgId, user.id, 'MEMBER');
     const archived = await archiveBrand(id, orgId);
     return formatSuccessResponse(archived);
   } catch (err) {

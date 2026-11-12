@@ -79,6 +79,31 @@ enum AdPlatform {
   GOOGLE_ADS
   META_ADS
   OPENAI_ADS
+  TIKTOK_ADS
+  MANUAL
+  OTHER
+}
+
+enum AdSourceType {
+  META_AD_LIBRARY
+  GOOGLE_ADS_TRANSPARENCY
+  TIKTOK_CREATIVE_CENTER
+  MANUAL_SUBMISSION
+}
+
+enum AdFormat {
+  IMAGE
+  VIDEO
+  CAROUSEL
+  TEXT
+  UNKNOWN
+}
+
+enum AdStatus {
+  ACTIVE
+  INACTIVE
+  UNKNOWN
+  REMOVED
 }
 
 enum ConnectionStatus {
@@ -95,6 +120,8 @@ enum SubStatus {
   PAST_DUE
   CANCELLED
   PAUSED
+  EXPIRED
+  SUSPENDED
 }
 
 // -----------------------------------------------------------------------------
@@ -134,9 +161,32 @@ model Organization {
   adInsights           AdInsight[]
   subscriptions        Subscription?
   usageCounters        UsageCounter[]
+  usageRecords         UsageRecord[]
+  invoices             Invoice[]
+  creditNotes          CreditNote[]
   auditLogs            AuditLog[]
   reportExports        ReportExport[]
   notifications        Notification[]
+  adRecords            AdRecord[]
+  adAnalyses           AdAnalysis[]
+  adMonitoringJobs     AdMonitoringJob[]
+  adChangeEvents       AdChangeEvent[]
+  adComparisons        AdComparison[]
+  adRecommendations    AdRecommendation[]
+  adCollectionRuns     AdCollectionRun[]
+  chatgptAdsAccounts        ChatGPTAdsAccount[]
+  chatgptAdsCredentials     ChatGPTAdsCredential[]
+  chatgptAdsCampaigns       ChatGPTAdsCampaign[]
+  chatgptAdsAdGroups        ChatGPTAdsAdGroup[]
+  chatgptAdsAds             ChatGPTAdsAd[]
+  chatgptAdsAssets          ChatGPTAdsAsset[]
+  chatgptAdsInsights        ChatGPTAdsInsight[]
+  chatgptAdsConversions     ChatGPTAdsConversion[]
+  chatgptAdsEvents          ChatGPTAdsEvent[]
+  chatgptAdsSyncRuns        ChatGPTAdsSyncRun[]
+  chatgptAdsRecommendations ChatGPTAdsRecommendation[]
+  chatgptAdsAlerts          ChatGPTAdsAlert[]
+  chatgptAdsAuditLogs       ChatGPTAdsAuditLog[]
 
   @@map("organizations")
 }
@@ -236,6 +286,10 @@ model Project {
   trackingSchedules    TrackingSchedule[]
   aiUsageRecords       AIUsageRecord[]
   adConnections        AdConnection[]
+  adRecords            AdRecord[]
+  adMonitoringJobs     AdMonitoringJob[]
+  adRecommendations    AdRecommendation[]
+  adCollectionRuns     AdCollectionRun[]
 
   @@index([organizationId])
   @@index([workspaceId])
@@ -269,6 +323,8 @@ model Brand {
 
   organization        Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project             Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  adRecords           AdRecord[]
+  adRecommendations   AdRecommendation[]
 
   @@index([projectId])
   @@index([organizationId])
@@ -276,22 +332,27 @@ model Brand {
 }
 
 model Competitor {
-  id               String       @id @default(uuid()) @db.Uuid
-  organizationId   String       @map("organization_id") @db.Uuid
-  projectId        String       @map("project_id") @db.Uuid
-  canonicalName    String       @map("canonical_name") @db.VarChar(255)
-  domain           String       @db.VarChar(255)
-  website          String?      @db.VarChar(255)
+  id               String            @id @default(uuid()) @db.Uuid
+  organizationId   String            @map("organization_id") @db.Uuid
+  projectId        String            @map("project_id") @db.Uuid
+  canonicalName    String            @map("canonical_name") @db.VarChar(255)
+  domain           String            @db.VarChar(255)
+  website          String?           @db.VarChar(255)
   description      String?
-  productsServices String[]     @default([]) @map("products_services")
-  keywords         String[]     @default([])
-  aliases          String[]     @default([])
-  isArchived       Boolean      @default(false) @map("is_archived")
-  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  productsServices String[]          @default([]) @map("products_services")
+  keywords         String[]          @default([])
+  aliases          String[]          @default([])
+  isArchived       Boolean           @default(false) @map("is_archived")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  project          Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project           Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  adRecords         AdRecord[]
+  adMonitoringJobs  AdMonitoringJob[]
+  adChangeEvents    AdChangeEvent[]
+  adRecommendations AdRecommendation[]
+  adCollectionRuns  AdCollectionRun[]
 
   @@index([projectId])
   @@index([organizationId])
@@ -644,27 +705,325 @@ model PublicAdObservation {
 }
 
 // -----------------------------------------------------------------------------
+// MODULE M5: COMPETITOR AD INTELLIGENCE MODELS
+// -----------------------------------------------------------------------------
+
+model AdSource {
+  id                 String       @id @default(uuid()) @db.Uuid
+  name               String       @db.VarChar(100)
+  sourceType         AdSourceType @map("source_type")
+  isSupported        Boolean      @default(true) @map("is_supported")
+  apiEndpoint        String?      @map("api_endpoint")
+  rateLimitPerMinute Int          @default(60) @map("rate_limit_per_minute")
+  metadata           Json         @default("{}")
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  adRecords          AdRecord[]
+
+  @@map("ad_sources")
+}
+
+model AdRecord {
+  id                   String         @id @default(uuid()) @db.Uuid
+  organizationId       String         @map("organization_id") @db.Uuid
+  projectId            String         @map("project_id") @db.Uuid
+  competitorId         String?        @map("competitor_id") @db.Uuid
+  brandId              String?        @map("brand_id") @db.Uuid
+  adSourceId           String?        @map("ad_source_id") @db.Uuid
+  platform             AdPlatform     @default(META_ADS)
+  externalAdId         String         @map("external_ad_id") @db.VarChar(255)
+  originalUrl          String?        @map("original_url")
+  advertiserName       String         @map("advertiser_name") @db.VarChar(255)
+  advertiserExternalId String?        @map("advertiser_external_id") @db.VarChar(255)
+  headline             String?
+  primaryText          String?        @map("primary_text")
+  description          String?
+  ctaText              String?        @map("cta_text") @db.VarChar(100)
+  format               AdFormat       @default(UNKNOWN)
+  landingPageUrl       String?        @map("landing_page_url")
+  country              String?        @default("IN") @db.VarChar(10)
+  language             String?        @default("en") @db.VarChar(10)
+  firstSeenAt          DateTime       @default(now()) @map("first_seen_at") @db.Timestamptz
+  lastSeenAt           DateTime       @default(now()) @map("last_seen_at") @db.Timestamptz
+  contentHash          String         @map("content_hash") @db.VarChar(64)
+  status               AdStatus       @default(ACTIVE)
+  rawMetadata          Json           @default("{}") @map("raw_metadata")
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization         Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project              Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  competitor           Competitor?    @relation(fields: [competitorId], references: [id], onDelete: SetNull)
+  brand                Brand?         @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  adSource             AdSource?      @relation(fields: [adSourceId], references: [id], onDelete: SetNull)
+  creatives            AdCreative[]
+  landingPages         AdLandingPage[]
+  snapshots            AdSnapshot[]
+  analyses             AdAnalysis[]
+  changeEvents         AdChangeEvent[]
+
+  @@unique([organizationId, platform, externalAdId], name: "uq_org_platform_ext_ad")
+  @@index([organizationId, platform])
+  @@index([competitorId])
+  @@index([projectId])
+  @@index([contentHash])
+  @@index([firstSeenAt])
+  @@map("ad_records")
+}
+
+model AdCreative {
+  id           String    @id @default(uuid()) @db.Uuid
+  adRecordId   String    @map("ad_record_id") @db.Uuid
+  mediaType    AdFormat  @default(IMAGE) @map("media_type")
+  mediaUrl     String?   @map("media_url")
+  thumbnailUrl String?   @map("thumbnail_url")
+  caption      String?
+  width        Int?
+  height       Int?
+  checksum     String?   @db.VarChar(64)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  adRecord     AdRecord  @relation(fields: [adRecordId], references: [id], onDelete: Cascade)
+
+  @@index([adRecordId])
+  @@map("ad_creatives")
+}
+
+model AdLandingPage {
+  id               String    @id @default(uuid()) @db.Uuid
+  adRecordId       String    @map("ad_record_id") @db.Uuid
+  url              String
+  normalizedDomain String    @map("normalized_domain") @db.VarChar(255)
+  pageTitle        String?   @map("page_title")
+  metaDescription  String?   @map("meta_description")
+  statusCode       Int?      @map("status_code")
+  isAccessible     Boolean   @default(true) @map("is_accessible")
+  extractedOffers  String[]  @default([]) @map("extracted_offers")
+  lastCheckedAt    DateTime  @default(now()) @map("last_checked_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  adRecord         AdRecord  @relation(fields: [adRecordId], references: [id], onDelete: Cascade)
+
+  @@index([adRecordId])
+  @@index([normalizedDomain])
+  @@map("ad_landing_pages")
+}
+
+model AdSnapshot {
+  id           String    @id @default(uuid()) @db.Uuid
+  adRecordId   String    @map("ad_record_id") @db.Uuid
+  contentHash  String    @map("content_hash") @db.VarChar(64)
+  snapshotData Json      @map("snapshot_data")
+  observedAt   DateTime  @default(now()) @map("observed_at") @db.Timestamptz
+
+  adRecord     AdRecord  @relation(fields: [adRecordId], references: [id], onDelete: Cascade)
+
+  @@index([adRecordId, observedAt(sort: Desc)])
+  @@map("ad_snapshots")
+}
+
+model AdAnalysis {
+  id                    String       @id @default(uuid()) @db.Uuid
+  adRecordId            String       @map("ad_record_id") @db.Uuid
+  organizationId        String       @map("organization_id") @db.Uuid
+  mainMessage           String       @map("main_message")
+  valueProposition      String       @map("value_proposition")
+  painPoints            String[]     @default([]) @map("pain_points")
+  audienceSignals       String[]     @default([]) @map("audience_signals")
+  emotionalVsRational   String       @default("BALANCED") @map("emotional_vs_rational") @db.VarChar(20)
+  positioning           String
+  promotionalStrategy   String       @map("promotional_strategy")
+  offerStrategy         String       @map("offer_strategy")
+  ctaStrategy           String       @map("cta_strategy")
+  creativeFormat        String       @map("creative_format") @db.VarChar(50)
+  messagingAngle        String       @map("messaging_angle")
+  landingPageRelevance  String?      @map("landing_page_relevance")
+  confidenceScore       Float        @default(0.85) @map("confidence_score")
+  model                 String       @default("gemini-3.8-flash") @db.VarChar(100)
+  promptTokens          Int          @default(0) @map("prompt_tokens")
+  completionTokens      Int          @default(0) @map("completion_tokens")
+  estimatedCostPaise    Int          @default(0) @map("estimated_cost_paise")
+  rawAiOutput           Json         @default("{}") @map("raw_ai_output")
+  analysisVersion       Int          @default(1) @map("analysis_version")
+  status                String       @default("COMPLETED") @db.VarChar(50)
+  errorMessage          String?      @map("error_message")
+  createdAt             DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  adRecord              AdRecord     @relation(fields: [adRecordId], references: [id], onDelete: Cascade)
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([adRecordId])
+  @@index([organizationId])
+  @@map("ad_analyses")
+}
+
+model AdMonitoringJob {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  projectId      String       @map("project_id") @db.Uuid
+  competitorId   String       @map("competitor_id") @db.Uuid
+  checkFrequency String       @default("DAILY") @map("check_frequency") @db.VarChar(20)
+  sources        String[]     @default(["META_AD_LIBRARY"])
+  isActive       Boolean      @default(true) @map("is_active")
+  lastRunAt      DateTime?    @map("last_run_at") @db.Timestamptz
+  nextRunAt      DateTime?    @map("next_run_at") @db.Timestamptz
+  lastStatus     String?      @default("PENDING") @map("last_status") @db.VarChar(50)
+  errorMessage   String?      @map("error_message")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  competitor     Competitor   @relation(fields: [competitorId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, competitorId], name: "uq_org_competitor_monitoring")
+  @@index([organizationId, isActive])
+  @@index([competitorId])
+  @@map("ad_monitoring_jobs")
+}
+
+model AdChangeEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  adRecordId     String       @map("ad_record_id") @db.Uuid
+  competitorId   String?      @map("competitor_id") @db.Uuid
+  changeType     String       @map("change_type") @db.VarChar(50)
+  fieldChanged   String?      @map("field_changed") @db.VarChar(100)
+  previousValue  String?      @map("previous_value")
+  newValue       String?      @map("new_value")
+  detectedAt     DateTime     @default(now()) @map("detected_at") @db.Timestamptz
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adRecord       AdRecord     @relation(fields: [adRecordId], references: [id], onDelete: Cascade)
+  competitor     Competitor?  @relation(fields: [competitorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, detectedAt(sort: Desc)])
+  @@index([adRecordId])
+  @@map("ad_change_events")
+}
+
+model AdComparison {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  title           String       @db.VarChar(255)
+  adRecordIds     String[]     @map("ad_record_ids")
+  aiSummary       String?      @map("ai_summary")
+  commonThemes    String[]     @default([]) @map("common_themes")
+  differingThemes String[]     @default([]) @map("differing_themes")
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("ad_comparisons")
+}
+
+model AdRecommendation {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  projectId        String       @map("project_id") @db.Uuid
+  brandId          String?      @map("brand_id") @db.Uuid
+  competitorId     String?      @map("competitor_id") @db.Uuid
+  category         String       @db.VarChar(50)
+  title            String       @db.VarChar(255)
+  explanation      String
+  supportingAdIds  String[]     @default([]) @map("supporting_ad_ids")
+  sourceReferences Json         @default("[]") @map("source_references")
+  evidenceSummary  String       @map("evidence_summary")
+  expectedBenefit  String       @map("expected_benefit")
+  confidence       String       @default("HIGH") @db.VarChar(20)
+  suggestedAction  String       @map("suggested_action")
+  status           String       @default("NEW") @db.VarChar(50)
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project          Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  brand            Brand?       @relation(fields: [brandId], references: [id], onDelete: SetNull)
+  competitor       Competitor?  @relation(fields: [competitorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([projectId])
+  @@map("ad_recommendations")
+}
+
+model AdCollectionRun {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  projectId      String       @map("project_id") @db.Uuid
+  competitorId   String?      @map("competitor_id") @db.Uuid
+  source         String       @db.VarChar(100)
+  status         String       @default("RUNNING") @db.VarChar(50)
+  adsDiscovered  Int          @default(0) @map("ads_discovered")
+  adsProcessed   Int          @default(0) @map("ads_processed")
+  errors         Json         @default("[]")
+  startedAt      DateTime     @default(now()) @map("started_at") @db.Timestamptz
+  completedAt    DateTime?    @map("completed_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  competitor     Competitor?  @relation(fields: [competitorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, startedAt(sort: Desc)])
+  @@map("ad_collection_runs")
+}
+
+// -----------------------------------------------------------------------------
 // BILLING, SUBSCRIPTIONS & USAGE METERING
 // -----------------------------------------------------------------------------
 
-model Subscription {
-  id                     String       @id @default(uuid()) @db.Uuid
-  organizationId         String       @unique @map("organization_id") @db.Uuid
-  planTier               String       @default("STARTER") @map("plan_tier") @db.VarChar(50)
-  billingCycle           String       @default("MONTHLY") @map("billing_cycle") @db.VarChar(20)
-  status                 SubStatus    @default(TRIAL)
-  razorpayCustomerId     String?      @map("razorpay_customer_id") @db.VarChar(255)
-  razorpaySubscriptionId String?      @unique @map("razorpay_subscription_id") @db.VarChar(255)
-  currentPeriodStart     DateTime     @map("current_period_start") @db.Timestamptz
-  currentPeriodEnd       DateTime     @map("current_period_end") @db.Timestamptz
-  cancelAtPeriodEnd      Boolean      @default(false) @map("cancel_at_period_end")
-  createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt              DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+model SubscriptionPlan {
+  id                   String         @id @default(uuid()) @db.Uuid
+  slug                 String         @unique @db.VarChar(50) // 'free', 'starter', 'pro', 'agency'
+  name                 String         @db.VarChar(100)
+  description          String?
+  monthlyPricePaise    Int            @default(0) @map("monthly_price_paise")
+  annualPricePaise     Int            @default(0) @map("annual_price_paise")
+  currency             String         @default("INR") @db.VarChar(3)
+  promptRunsLimit      Int            @default(100) @map("prompt_runs_limit")
+  brandLimit           Int            @default(1) @map("brand_limit")
+  workspaceLimit       Int            @default(1) @map("workspace_limit")
+  competitorLimit      Int            @default(3) @map("competitor_limit")
+  features             String[]       @default([])
+  isActive             Boolean        @default(true) @map("is_active")
+  isDefault            Boolean        @default(false) @map("is_default")
+  trialDays            Int            @default(14) @map("trial_days")
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  payments               Payment[]
+  subscriptions        Subscription[]
+
+  @@map("subscription_plans")
+}
+
+model Subscription {
+  id                        String            @id @default(uuid()) @db.Uuid
+  organizationId            String            @unique @map("organization_id") @db.Uuid
+  planId                    String?           @map("plan_id") @db.Uuid
+  planTier                  String            @default("STARTER") @map("plan_tier") @db.VarChar(50)
+  billingCycle              String            @default("MONTHLY") @map("billing_cycle") @db.VarChar(20)
+  status                    SubStatus         @default(TRIAL)
+  razorpayCustomerId        String?           @map("razorpay_customer_id") @db.VarChar(255)
+  razorpaySubscriptionId    String?           @unique @map("razorpay_subscription_id") @db.VarChar(255)
+  currentPeriodStart        DateTime          @map("current_period_start") @db.Timestamptz
+  currentPeriodEnd          DateTime          @map("current_period_end") @db.Timestamptz
+  cancelAtPeriodEnd         Boolean           @default(false) @map("cancel_at_period_end")
+  canceledAt                DateTime?         @map("canceled_at") @db.Timestamptz
+  effectiveCancellationDate DateTime?         @map("effective_cancellation_date") @db.Timestamptz
+  trialEndsAt               DateTime?         @map("trial_ends_at") @db.Timestamptz
+  createdAt                 DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization              Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  plan                      SubscriptionPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  payments                  Payment[]
+  invoices                  Invoice[]
 
   @@index([organizationId])
+  @@index([planId])
   @@map("subscriptions")
 }
 
@@ -675,6 +1034,7 @@ model UsageCounter {
   periodEnd           DateTime     @map("period_end") @db.Timestamptz
   promptRunsUsed      Int          @default(0) @map("prompt_runs_used")
   promptRunsLimit     Int          @default(100) @map("prompt_runs_limit")
+  promptRunsReserved  Int          @default(0) @map("prompt_runs_reserved")
   adSyncsUsed         Int          @default(0) @map("ad_syncs_used")
   adSyncsLimit        Int          @default(30) @map("ad_syncs_limit")
   activeProjectsCount Int          @default(1) @map("active_projects_count")
@@ -689,20 +1049,95 @@ model UsageCounter {
   @@map("usage_counters")
 }
 
-model Payment {
+model UsageRecord {
   id             String       @id @default(uuid()) @db.Uuid
-  subscriptionId String       @map("subscription_id") @db.Uuid
-  razorpayPaymentId String    @unique @map("razorpay_payment_id") @db.VarChar(255)
-  amountPaise    BigInt       @map("amount_paise")
-  currency       String       @default("INR") @db.VarChar(3)
-  status         String       @db.VarChar(50) // 'captured', 'failed', 'refunded'
-  invoiceUrl     String?      @map("invoice_url")
+  organizationId String       @map("organization_id") @db.Uuid
+  usageType      String       @default("PROMPT_RUN") @map("usage_type") @db.VarChar(50)
+  quantity       Int          @default(1)
+  promptRunId    String?      @map("prompt_run_id") @db.Uuid
+  trackingRunId  String?      @map("tracking_run_id") @db.Uuid
+  idempotencyKey String?      @unique @map("idempotency_key") @db.VarChar(255)
+  periodStart    DateTime     @map("period_start") @db.Timestamptz
+  periodEnd      DateTime     @map("period_end") @db.Timestamptz
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, periodStart])
+  @@index([trackingRunId])
+  @@map("usage_records")
+}
+
+model Payment {
+  id                  String        @id @default(uuid()) @db.Uuid
+  subscriptionId      String        @map("subscription_id") @db.Uuid
+  organizationId      String?       @map("organization_id") @db.Uuid
+  invoiceId           String?       @map("invoice_id") @db.Uuid
+  provider            String        @default("mock") @db.VarChar(50)
+  razorpayPaymentId   String?       @unique @map("razorpay_payment_id") @db.VarChar(255)
+  providerPaymentId   String?       @map("provider_payment_id") @db.VarChar(255)
+  idempotencyKey      String?       @unique @map("idempotency_key") @db.VarChar(255)
+  amountPaise         BigInt        @map("amount_paise")
+  currency            String        @default("INR") @db.VarChar(3)
+  status              String        @db.VarChar(50) // 'captured', 'failed', 'refunded', 'pending'
+  paymentMethod       String?       @map("payment_method") @db.VarChar(50)
+  failureReason       String?       @map("failure_reason")
+  invoiceUrl          String?       @map("invoice_url")
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  subscription        Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoice             Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   @@index([subscriptionId])
+  @@index([organizationId])
   @@map("payments")
+}
+
+model Invoice {
+  id                 String        @id @default(uuid()) @db.Uuid
+  organizationId     String        @map("organization_id") @db.Uuid
+  subscriptionId     String?       @map("subscription_id") @db.Uuid
+  invoiceNumber      String        @unique @map("invoice_number") @db.VarChar(100)
+  billingPeriodStart DateTime      @map("billing_period_start") @db.Timestamptz
+  billingPeriodEnd   DateTime      @map("billing_period_end") @db.Timestamptz
+  subtotalPaise      BigInt        @map("subtotal_paise")
+  taxPaise           BigInt        @default(0) @map("tax_paise")
+  totalPaise         BigInt        @map("total_paise")
+  currency           String        @default("INR") @db.VarChar(3)
+  status             String        @default("PAID") @db.VarChar(50) // 'DRAFT', 'PAID', 'VOID', 'UNCOLLECTIBLE'
+  customerName       String?       @map("customer_name") @db.VarChar(255)
+  customerEmail      String?       @map("customer_email") @db.VarChar(255)
+  customerAddress    String?       @map("customer_address")
+  customerGstin      String?       @map("customer_gstin") @db.VarChar(50)
+  taxRatePercent     Decimal       @default(18.0) @map("tax_rate_percent") @db.Decimal(5, 2)
+  pdfUrl             String?       @map("pdf_url")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization       Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription       Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  payments           Payment[]
+  creditNotes        CreditNote[]
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@map("invoices")
+}
+
+model CreditNote {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  invoiceId      String       @map("invoice_id") @db.Uuid
+  creditNumber   String       @unique @map("credit_number") @db.VarChar(100)
+  amountPaise    BigInt       @map("amount_paise")
+  reason         String?
+  status         String       @default("ISSUED") @db.VarChar(50) // 'ISSUED', 'APPLIED', 'VOID'
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invoice        Invoice      @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@map("credit_notes")
 }
 
 model WebhookEvent {
@@ -772,4 +1207,346 @@ model Notification {
   @@index([organizationId, isRead])
   @@map("notifications")
 }
+
+// -----------------------------------------------------------------------------
+// MODULE M6 — CHATGPT ADS INTELLIGENCE & ADVERTISER INTEGRATION
+// -----------------------------------------------------------------------------
+
+model ChatGPTAdsAccount {
+  id                   String       @id @default(uuid()) @db.Uuid
+  organizationId       String       @map("organization_id") @db.Uuid
+  openaiAccountId      String       @map("openai_account_id") @db.VarChar(255)
+  name                 String       @db.VarChar(255)
+  currency             String       @default("USD") @db.VarChar(10)
+  timezone             String       @default("UTC") @db.VarChar(50)
+  status               String       @default("CONNECTED") @db.VarChar(50)
+  reviewStatus         String?      @map("review_status") @db.VarChar(50)
+  lastSyncAt           DateTime?    @map("last_sync_at") @db.Timestamptz
+  lastSuccessfulSyncAt DateTime?    @map("last_successful_sync_at") @db.Timestamptz
+  syncError            String?      @map("sync_error")
+  dataFreshnessInfo    Json         @default("{}") @map("data_freshness_info")
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  credentials          ChatGPTAdsCredential[]
+  campaigns            ChatGPTAdsCampaign[]
+  adGroups             ChatGPTAdsAdGroup[]
+  ads                  ChatGPTAdsAd[]
+  assets               ChatGPTAdsAsset[]
+  insights             ChatGPTAdsInsight[]
+  conversions          ChatGPTAdsConversion[]
+  syncRuns             ChatGPTAdsSyncRun[]
+  recommendations      ChatGPTAdsRecommendation[]
+  alerts               ChatGPTAdsAlert[]
+  auditLogs            ChatGPTAdsAuditLog[]
+
+  @@unique([organizationId, openaiAccountId], map: "uq_org_openai_account")
+  @@index([organizationId, status])
+  @@map("chatgpt_ads_accounts")
+}
+
+model ChatGPTAdsCredential {
+  id             String            @id @default(uuid()) @db.Uuid
+  accountId      String            @map("account_id") @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  encryptedKey   String            @map("encrypted_key")
+  iv             String            @db.VarChar(64)
+  authTag        String            @map("auth_tag") @db.VarChar(64)
+  keyPrefix      String            @map("key_prefix") @db.VarChar(32)
+  lastFour       String            @map("last_four") @db.VarChar(8)
+  status         String            @default("ACTIVE") @db.VarChar(50)
+  rotatedAt      DateTime?         @map("rotated_at") @db.Timestamptz
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  account        ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([accountId])
+  @@map("chatgpt_ads_credentials")
+}
+
+model ChatGPTAdsCampaign {
+  id                String            @id @default(uuid()) @db.Uuid
+  accountId         String            @map("account_id") @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  openaiCampaignId  String            @map("openai_campaign_id") @db.VarChar(255)
+  name              String            @db.VarChar(255)
+  objective         String            @db.VarChar(100)
+  status            String            @default("PAUSED") @db.VarChar(50)
+  deliveryStatus    String?           @map("delivery_status") @db.VarChar(50)
+  budgetAmountPaise BigInt            @default(0) @map("budget_amount_paise")
+  budgetType        String            @default("DAILY") @map("budget_type") @db.VarChar(50)
+  currency          String            @default("USD") @db.VarChar(10)
+  startTime         DateTime?         @map("start_time") @db.Timestamptz
+  endTime           DateTime?         @map("end_time") @db.Timestamptz
+  targetingConfig   Json              @default("{}") @map("targeting_config")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  account           ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  adGroups          ChatGPTAdsAdGroup[]
+  insights          ChatGPTAdsInsight[]
+
+  @@unique([organizationId, openaiCampaignId], map: "uq_org_openai_campaign")
+  @@index([accountId, status])
+  @@index([organizationId])
+  @@map("chatgpt_ads_campaigns")
+}
+
+model ChatGPTAdsAdGroup {
+  id               String            @id @default(uuid()) @db.Uuid
+  campaignId       String            @map("campaign_id") @db.Uuid
+  accountId        String            @map("account_id") @db.Uuid
+  organizationId   String            @map("organization_id") @db.Uuid
+  openaiAdGroupId  String            @map("openai_ad_group_id") @db.VarChar(255)
+  name             String            @db.VarChar(255)
+  status           String            @default("PAUSED") @db.VarChar(50)
+  bidAmountPaise   BigInt?           @map("bid_amount_paise")
+  bidStrategy      String            @default("MAXIMIZE_CLICKS") @map("bid_strategy") @db.VarChar(50)
+  contextHints     String[]          @default([]) @map("context_hints")
+  audienceConfig   Json              @default("{}") @map("audience_config")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  campaign         ChatGPTAdsCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  account          ChatGPTAdsAccount  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization     Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ads              ChatGPTAdsAd[]
+  insights         ChatGPTAdsInsight[]
+
+  @@unique([organizationId, openaiAdGroupId], map: "uq_org_openai_ad_group")
+  @@index([campaignId])
+  @@index([accountId])
+  @@map("chatgpt_ads_ad_groups")
+}
+
+model ChatGPTAdsAd {
+  id             String            @id @default(uuid()) @db.Uuid
+  adGroupId      String            @map("ad_group_id") @db.Uuid
+  accountId      String            @map("account_id") @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  openaiAdId     String            @map("openai_ad_id") @db.VarChar(255)
+  name           String            @db.VarChar(255)
+  headline       String
+  adCopy         String            @map("ad_copy")
+  advertiserName String            @map("advertiser_name") @db.VarChar(255)
+  destinationUrl String            @map("destination_url")
+  landingPageUrl String            @map("landing_page_url")
+  imageUrl       String?           @map("image_url")
+  assetId        String?           @map("asset_id") @db.Uuid
+  status         String            @default("PAUSED") @db.VarChar(50)
+  reviewStatus   String            @default("PENDING") @map("review_status") @db.VarChar(50)
+  servingIssues  Json              @default("[]") @map("serving_issues")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  adGroup        ChatGPTAdsAdGroup @relation(fields: [adGroupId], references: [id], onDelete: Cascade)
+  account        ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  asset          ChatGPTAdsAsset?  @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  insights       ChatGPTAdsInsight[]
+
+  @@unique([organizationId, openaiAdId], map: "uq_org_openai_ad")
+  @@index([adGroupId])
+  @@index([accountId])
+  @@map("chatgpt_ads_ads")
+}
+
+model ChatGPTAdsAsset {
+  id             String            @id @default(uuid()) @db.Uuid
+  accountId      String            @map("account_id") @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  openaiAssetId  String            @map("openai_asset_id") @db.VarChar(255)
+  filename       String            @db.VarChar(255)
+  mimeType       String            @map("mime_type") @db.VarChar(100)
+  fileSizeBytes  Int               @map("file_size_bytes")
+  url            String
+  status         String            @default("ACTIVE") @db.VarChar(50)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  account        ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ads            ChatGPTAdsAd[]
+
+  @@unique([organizationId, openaiAssetId], map: "uq_org_openai_asset")
+  @@index([accountId])
+  @@map("chatgpt_ads_assets")
+}
+
+model ChatGPTAdsInsight {
+  id                   String            @id @default(uuid()) @db.Uuid
+  organizationId       String            @map("organization_id") @db.Uuid
+  accountId            String            @map("account_id") @db.Uuid
+  campaignId           String?           @map("campaign_id") @db.Uuid
+  adGroupId            String?           @map("ad_group_id") @db.Uuid
+  adId                 String?           @map("ad_id") @db.Uuid
+  date                 DateTime          @db.Date
+  impressions          Int?
+  clicks               Int?
+  ctr                  Float?
+  spendPaise           BigInt?           @map("spend_paise")
+  cpcPaise             BigInt?           @map("cpc_paise")
+  cpmPaise             BigInt?           @map("cpm_paise")
+  conversions          Int?
+  cpaPaise             BigInt?           @map("cpa_paise")
+  attributedSalesPaise BigInt?           @map("attributed_sales_paise")
+  roas                 Float?
+  breakdownCountry     String?           @map("breakdown_country") @db.VarChar(10)
+  breakdownDevice      String?           @map("breakdown_device") @db.VarChar(50)
+  breakdownPlatform    String?           @map("breakdown_platform") @db.VarChar(50)
+  isFinal              Boolean           @default(false) @map("is_final")
+  fetchedAt            DateTime          @default(now()) @map("fetched_at") @db.Timestamptz
+
+  organization         Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account              ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  campaign             ChatGPTAdsCampaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  adGroup              ChatGPTAdsAdGroup?  @relation(fields: [adGroupId], references: [id], onDelete: SetNull)
+  ad                   ChatGPTAdsAd?       @relation(fields: [adId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, accountId, date(sort: Desc)])
+  @@index([campaignId, date(sort: Desc)])
+  @@map("chatgpt_ads_insights")
+}
+
+model ChatGPTAdsConversion {
+  id                     String            @id @default(uuid()) @db.Uuid
+  organizationId         String            @map("organization_id") @db.Uuid
+  accountId              String            @map("account_id") @db.Uuid
+  pixelId                String            @map("pixel_id") @db.VarChar(255)
+  pixelCode              String            @map("pixel_code")
+  pixelStatus            String            @default("PENDING_VERIFICATION") @map("pixel_status") @db.VarChar(50)
+  conversionsApiEnabled  Boolean           @default(false) @map("conversions_api_enabled")
+  supportedEvents        String[]          @default(["PAGE_VIEW", "SIGN_UP", "PURCHASE", "LEAD"]) @map("supported_events")
+  attributionWindowDays  Int               @default(7) @map("attribution_window_days")
+  viewThroughWindowHours Int               @default(24) @map("view_through_window_hours")
+  createdAt              DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization           Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account                ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  events                 ChatGPTAdsEvent[]
+
+  @@unique([organizationId, accountId], map: "uq_org_chatgpt_conversion")
+  @@map("chatgpt_ads_conversions")
+}
+
+model ChatGPTAdsEvent {
+  id                 String               @id @default(uuid()) @db.Uuid
+  organizationId     String               @map("organization_id") @db.Uuid
+  conversionConfigId String               @map("conversion_config_id") @db.Uuid
+  eventName          String               @map("event_name") @db.VarChar(100)
+  eventId            String               @map("event_id") @db.VarChar(255)
+  deduplicationId    String               @unique @map("deduplication_id") @db.VarChar(255)
+  eventTimestamp     DateTime             @map("event_timestamp") @db.Timestamptz
+  eventSource        String               @default("SERVER") @map("event_source") @db.VarChar(50)
+  currency           String               @default("USD") @db.VarChar(10)
+  valuePaise         BigInt?              @map("value_paise")
+  status             String               @default("SENT") @db.VarChar(50)
+  apiResponseCode    Int?                 @map("api_response_code")
+  metadata           Json                 @default("{}")
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz
+
+  organization       Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  conversionConfig   ChatGPTAdsConversion @relation(fields: [conversionConfigId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, eventName, eventTimestamp(sort: Desc)])
+  @@map("chatgpt_ads_events")
+}
+
+model ChatGPTAdsSyncRun {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  accountId      String            @map("account_id") @db.Uuid
+  syncType       String            @map("sync_type") @db.VarChar(50)
+  status         String            @default("RUNNING") @db.VarChar(50)
+  recordsSynced  Int               @default(0) @map("records_synced")
+  errorMessage   String?           @map("error_message")
+  startedAt      DateTime          @default(now()) @map("started_at") @db.Timestamptz
+  completedAt    DateTime?         @map("completed_at") @db.Timestamptz
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account        ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, accountId, startedAt(sort: Desc)])
+  @@map("chatgpt_ads_sync_runs")
+}
+
+model ChatGPTAdsRecommendation {
+  id                String            @id @default(uuid()) @db.Uuid
+  organizationId    String            @map("organization_id") @db.Uuid
+  accountId         String            @map("account_id") @db.Uuid
+  campaignId        String?           @map("campaign_id") @db.Uuid
+  adGroupId         String?           @map("ad_group_id") @db.Uuid
+  category          String            @db.VarChar(50)
+  title             String            @db.VarChar(255)
+  explanation       String
+  supportingMetrics Json              @default("{}") @map("supporting_metrics")
+  sourceDataPeriod  String            @map("source_data_period") @db.VarChar(100)
+  expectedDirection String            @map("expected_direction") @db.VarChar(100)
+  confidence        String            @default("HIGH") @db.VarChar(20)
+  potentialRisks    String            @map("potential_risks")
+  suggestedAction   String            @map("suggested_action")
+  actionPayload     Json              @default("{}") @map("action_payload")
+  status            String            @default("PENDING") @db.VarChar(50)
+  appliedAt         DateTime?         @map("applied_at") @db.Timestamptz
+  appliedByUserId   String?           @map("applied_by_user_id") @db.Uuid
+  executionResult   String?           @map("execution_result")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  organization      Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account           ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@index([accountId])
+  @@map("chatgpt_ads_recommendations")
+}
+
+model ChatGPTAdsAlert {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String            @map("organization_id") @db.Uuid
+  accountId      String            @map("account_id") @db.Uuid
+  campaignId     String?           @map("campaign_id") @db.Uuid
+  severity       String            @default("INFO") @db.VarChar(20)
+  type           String            @db.VarChar(50)
+  title          String            @db.VarChar(255)
+  message        String
+  metrics        Json              @default("{}")
+  isRead         Boolean           @default(false) @map("is_read")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account        ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, isRead, createdAt(sort: Desc)])
+  @@index([accountId])
+  @@map("chatgpt_ads_alerts")
+}
+
+model ChatGPTAdsAuditLog {
+  id              String            @id @default(uuid()) @db.Uuid
+  organizationId  String            @map("organization_id") @db.Uuid
+  accountId       String            @map("account_id") @db.Uuid
+  actorUserId     String?           @map("actor_user_id") @db.Uuid
+  action          String            @db.VarChar(100)
+  targetType      String            @map("target_type") @db.VarChar(50)
+  targetId        String            @map("target_id") @db.VarChar(255)
+  previousState   Json?             @map("previous_state")
+  newState        Json?             @map("new_state")
+  financialImpact String?           @map("financial_impact")
+  userConfirmed   Boolean           @default(true) @map("user_confirmed")
+  ipAddress       String?           @map("ip_address") @db.VarChar(45)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  account         ChatGPTAdsAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, accountId, createdAt(sort: Desc)])
+  @@map("chatgpt_ads_audit_logs")
+}
+
 

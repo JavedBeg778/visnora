@@ -8,6 +8,7 @@ import { OpenAIAdapter } from '../../integrations/ai-providers/openai';
 import { analyzeAiResponse } from './analysis-service';
 import { generateRecommendationsForRun } from './recommendation-service';
 import { USD_TO_INR_EXCHANGE_RATE, GEMINI_3_8_FLASH_PRICING, GEMINI_3_5_FLASH_LITE_PRICING } from '../billing/cost-calculator';
+import { reservePromptQuota, recordPromptUsage, releaseReservedQuota, QuotaExceededError } from '../billing/usage-meter';
 import { BrandEntity } from './types';
 
 export interface TrackingRunOptions {
@@ -111,6 +112,15 @@ export async function initTrackingRun(options: TrackingRunOptions): Promise<Init
   let targetBrand = null;
   if (brandId) {
     targetBrand = project.brands.find((b) => b.id === brandId);
+    if (!targetBrand) {
+      // Check if brand exists directly under organization
+      const directBrand = await prisma.brand.findFirst({
+        where: { id: brandId, organizationId, isArchived: false },
+      });
+      if (directBrand) {
+        targetBrand = directBrand;
+      }
+    }
   }
   if (!targetBrand) {
     targetBrand = project.brands.find((b) => b.isPrimary) || project.brands[0];
@@ -161,10 +171,23 @@ export async function initTrackingRun(options: TrackingRunOptions): Promise<Init
     throw new ValidationError('No active prompts found to track. Please create or enable prompts first.');
   }
 
-  // 3. Estimate Pre-Run Usage
+  // 3. Quota reservation check
+  if (!dryRun) {
+    const quotaReservation = await reservePromptQuota(organizationId, prompts.length);
+    if (!quotaReservation.allowed) {
+      throw new QuotaExceededError(
+        quotaReservation.consumed,
+        quotaReservation.limit,
+        quotaReservation.remaining,
+        quotaReservation.periodEnd
+      );
+    }
+  }
+
+  // 4. Estimate Pre-Run Usage
   const costEstimate = estimateTrackingRunCost(prompts.length, model, enableGrounding);
 
-  // 4. Create TrackingRun record
+  // 5. Create TrackingRun record
   const trackingRun = await prisma.trackingRun.create({
     data: {
       organizationId,
@@ -237,6 +260,24 @@ export async function executeTrackingRunPrompts(params: {
       const executedAt = new Date();
 
       try {
+        // Idempotency check: if prompt has already completed for this tracking run, avoid re-executing
+        const existingRun = await prisma.promptRun.findFirst({
+          where: {
+            promptId: prompt.id,
+            trackingRunId: trackingRun.id,
+            status: 'COMPLETED',
+          },
+        });
+
+        if (existingRun) {
+          return {
+            success: true,
+            inputTokens: existingRun.inputTokens,
+            outputTokens: existingRun.outputTokens,
+            costPaise: existingRun.actualCostPaise,
+          };
+        }
+
         const result = await adapter.runPrompt({
           promptId: prompt.id,
           promptText: prompt.promptText,
@@ -413,9 +454,9 @@ export async function executeTrackingRunPrompts(params: {
     for (const r of executionResults) {
       if (r.success) {
         successCount++;
-        totalInputTokens += r.inputTokens;
-        totalOutputTokens += r.outputTokens;
-        totalActualCostPaise += r.costPaise;
+        totalInputTokens += r.inputTokens || 0;
+        totalOutputTokens += r.outputTokens || 0;
+        totalActualCostPaise += r.costPaise || 0;
       } else {
         failedCount++;
       }
@@ -456,6 +497,29 @@ export async function executeTrackingRunPrompts(params: {
       },
     });
 
+    // Record billable usage and release unconsumed quota reservations
+    if (!dryRun) {
+      if (successCount > 0) {
+        try {
+          await recordPromptUsage({
+            organizationId,
+            quantity: successCount,
+            trackingRunId: trackingRun.id,
+          });
+        } catch (usageErr) {
+          console.error(`[TrackingPipeline] Failed to record prompt usage for run ${trackingRun.id}:`, usageErr);
+        }
+      }
+      const unconsumed = prompts.length - successCount;
+      if (unconsumed > 0) {
+        try {
+          await releaseReservedQuota(organizationId, unconsumed);
+        } catch (releaseErr) {
+          console.error(`[TrackingPipeline] Failed to release unconsumed quota for run ${trackingRun.id}:`, releaseErr);
+        }
+      }
+    }
+
     // Generate automated recommendations based on run data
     try {
       await generateRecommendationsForRun(organizationId, projectId, trackingRun.id);
@@ -474,6 +538,13 @@ export async function executeTrackingRunPrompts(params: {
     };
   } catch (unexpectedError: any) {
     console.error(`[TrackingPipeline] Fatal unexpected error in run ${trackingRun.id}:`, unexpectedError);
+    if (!dryRun) {
+      try {
+        await releaseReservedQuota(organizationId, prompts.length);
+      } catch (releaseErr) {
+        console.error(`[TrackingPipeline] Failed to release quota after unexpected error for run ${trackingRun.id}:`, releaseErr);
+      }
+    }
     try {
       await prisma.trackingRun.update({
         where: { id: trackingRun.id },

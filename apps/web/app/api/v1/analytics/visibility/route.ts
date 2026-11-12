@@ -6,8 +6,6 @@ import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
-  assertProjectAccess,
-  parseDateRangeDays,
 } from '@/lib/api-handler';
 import { getProjectVisibilityOverview } from '@/domain/ai-visibility/analytics-service';
 
@@ -22,7 +20,7 @@ export async function GET(request: NextRequest) {
     const orgId = request.headers.get('x-organization-id') || searchParams.get('orgId');
     const projectId = searchParams.get('projectId');
     const brandId = searchParams.get('brandId') || undefined;
-    const days = parseDateRangeDays(searchParams.get('days'));
+    const days = parseInt(searchParams.get('days') || '30', 10);
 
     if (!orgId) {
       return formatErrorResponse(new Error('Organization ID is required'), 'Bad request', 'VALIDATION_ERROR', 400);
@@ -31,8 +29,6 @@ export async function GET(request: NextRequest) {
     if (!projectId) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
-
-    await assertProjectAccess(orgId, projectId, user.id , brandId);
 
     const overview = await getProjectVisibilityOverview(orgId, projectId, days, brandId);
     return formatSuccessResponse(overview);

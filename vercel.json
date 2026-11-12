@@ -4,8 +4,7 @@
   "crons": [
     {
       "path": "/api/v1/tracking/cron",
-      "schedule": "0 * * * *"
+      "schedule": "30 18 * * *"
     }
   ]
 }
-

@@ -271,9 +271,14 @@ export async function applyRecommendation(organizationId: string, recommendation
     throw new RecommendationNotFoundError(recommendationId);
   }
 
+  // Audit Finding 18: Require an APPROVED recommendation before applying it
+  if (rec.status !== 'APPROVED') {
+    throw new Error(`Recommendation cannot be applied: current status is "${rec.status}". Recommendations must be explicitly APPROVED first.`);
+  }
+
   const action = rec.actionPayload as any;
 
-  // Execute applied changes
+  // Execute supported recommendation changes
   if (action?.type === 'ADD_NEGATIVE_CONTEXTS' && rec.campaignId) {
     const campaign = await prisma.chatGPTAdsCampaign.findFirst({
       where: { id: rec.campaignId, organizationId },
@@ -294,29 +299,40 @@ export async function applyRecommendation(organizationId: string, recommendation
         },
       });
     }
+
+    const updated = await prisma.chatGPTAdsRecommendation.update({
+      where: { id: recommendationId },
+      data: {
+        status: 'APPLIED',
+        appliedAt: new Date(),
+        appliedByUserId: actorUserId || null,
+        executionResult: `Successfully added ${action.contexts?.length || 0} negative context exclusions to campaign targeting.`,
+      },
+    });
+
+    await prisma.chatGPTAdsAuditLog.create({
+      data: {
+        organizationId,
+        accountId: rec.accountId,
+        action: 'RECOMMENDATION_APPLIED',
+        targetType: 'RECOMMENDATION',
+        targetId: recommendationId,
+        actorUserId: actorUserId || null,
+        newState: action,
+      },
+    });
+
+    return updated;
   }
 
-  const updated = await prisma.chatGPTAdsRecommendation.update({
+  // Audit Finding 18: For unsupported actions, return explicit NOT_SUPPORTED instead of falsely claiming APPLIED
+  const notSupportedResult = await prisma.chatGPTAdsRecommendation.update({
     where: { id: recommendationId },
     data: {
-      status: 'APPLIED',
-      appliedAt: new Date(),
-      appliedByUserId: actorUserId || null,
-      executionResult: 'Successfully executed recommendation changes.',
+      status: 'NOT_SUPPORTED',
+      executionResult: `Automated application for action type "${action?.type || 'UNKNOWN'}" is not supported yet by current API. Please apply manually.`,
     },
   });
 
-  await prisma.chatGPTAdsAuditLog.create({
-    data: {
-      organizationId,
-      accountId: rec.accountId,
-      action: 'RECOMMENDATION_APPLIED',
-      targetType: 'RECOMMENDATION',
-      targetId: recommendationId,
-      actorUserId: actorUserId || null,
-      newState: action,
-    },
-  });
-
-  return updated;
+  return notSupportedResult;
 }

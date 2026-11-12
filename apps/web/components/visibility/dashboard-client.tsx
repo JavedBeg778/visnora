@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Sparkles,
@@ -77,6 +77,17 @@ export function DashboardClient({
   const [runMessage, setRunMessage] = useState<string | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [runStatusType, setRunStatusType] = useState<'info' | 'success' | 'error' | null>(null);
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Audit Finding 8: Clean up active polling intervals on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // Quick Tracking Run Trigger
   const handleTriggerRun = async () => {
@@ -114,6 +125,10 @@ export function DashboardClient({
 
         // Non-blocking status polling while background worker executes prompts
         if (runId) {
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
           let attempts = 0;
           const maxAttempts = 24; // 24 * 2.5s = 60s
           const pollInterval = setInterval(async () => {
@@ -127,6 +142,7 @@ export function DashboardClient({
                 const r = runJson.data;
                 if (r.status === 'COMPLETED' || r.status === 'PARTIALLY_COMPLETED' || r.status === 'PARTIAL' || r.status === 'FAILED') {
                   clearInterval(pollInterval);
+                  pollTimerRef.current = null;
                   setRunning(false);
                   if (r.status === 'FAILED') {
                     setRunStatusType('error');
@@ -146,11 +162,13 @@ export function DashboardClient({
 
             if (attempts >= maxAttempts) {
               clearInterval(pollInterval);
+              pollTimerRef.current = null;
               setRunning(false);
               setRunStatusType('info');
               setRunMessage('Tracking run is continuing in background. You can inspect progress on the Runs page.');
             }
           }, 2500);
+          pollTimerRef.current = pollInterval;
         } else {
           setRunning(false);
         }

@@ -118,25 +118,30 @@ export async function ingestConversionEvent(input: ConversionsApiEventInput) {
     throw new Error('No connected ChatGPT Ads account found for conversion delivery.');
   }
 
-  let config = await prisma.chatGPTAdsConversion.findFirst({
+  const config = await prisma.chatGPTAdsConversion.findFirst({
     where: { organizationId, accountId: targetAccountId },
   });
 
-  if (!config) {
-    config = await prisma.chatGPTAdsConversion.create({
-      data: {
-        organizationId,
-        accountId: targetAccountId,
-        pixelId: `pix_${targetAccountId.slice(0, 8)}`,
-        pixelCode: generatePixelSnippet({ organizationId, accountId: targetAccountId }),
-        pixelStatus: 'ACTIVE',
-        conversionsApiEnabled: true,
-      },
-    });
+  if (!config || !config.pixelId) {
+    return {
+      status: 'NOT_CONFIGURED',
+      eventId: null,
+      deduplicationId: dedupKey,
+      message: 'Conversion tracking is not configured for this account. Configure pixelId before sending conversion events.',
+    };
+  }
+
+  if (!config.conversionsApiEnabled) {
+    return {
+      status: 'NOT_CONFIGURED',
+      eventId: null,
+      deduplicationId: dedupKey,
+      message: 'Conversions API is disabled for this account.',
+    };
   }
 
   // 5. Persist event record in DB
-  const eventId = `evt_${Date.now()}`;
+  const eventId = `evt_${crypto.randomUUID()}`;
   const conversionEvent = await prisma.chatGPTAdsEvent.create({
     data: {
       organizationId,
@@ -230,4 +235,69 @@ export async function listConversions(params: {
     apiResponseCode: c.apiResponseCode,
     createdAt: c.createdAt,
   }));
+}
+
+/**
+ * Gets conversion tracking configuration for an account.
+ */
+export async function getConversionConfig(organizationId: string, accountId: string) {
+  return await prisma.chatGPTAdsConversion.findFirst({
+    where: { organizationId, accountId },
+  });
+}
+
+/**
+ * Configures or updates conversion tracking configuration (Pixel and CAPI) for an account.
+ */
+export async function configureConversionTracking(params: {
+  organizationId: string;
+  accountId: string;
+  pixelId: string;
+  conversionsApiEnabled?: boolean;
+  supportedEvents?: string[];
+  attributionWindowDays?: number;
+  viewThroughWindowHours?: number;
+}) {
+  const {
+    organizationId,
+    accountId,
+    pixelId,
+    conversionsApiEnabled = true,
+    supportedEvents = ['PAGE_VIEW', 'SIGN_UP', 'PURCHASE', 'LEAD'],
+    attributionWindowDays = 7,
+    viewThroughWindowHours = 24,
+  } = params;
+
+  await assertEntitlement(organizationId, 'chatgpt_ads_intelligence');
+
+  const pixelCode = generatePixelSnippet({ organizationId, accountId });
+
+  return await prisma.chatGPTAdsConversion.upsert({
+    where: {
+      organizationId_accountId: {
+        organizationId,
+        accountId,
+      },
+    },
+    update: {
+      pixelId,
+      pixelCode,
+      pixelStatus: 'ACTIVE',
+      conversionsApiEnabled,
+      supportedEvents,
+      attributionWindowDays,
+      viewThroughWindowHours,
+    },
+    create: {
+      organizationId,
+      accountId,
+      pixelId,
+      pixelCode,
+      pixelStatus: 'ACTIVE',
+      conversionsApiEnabled,
+      supportedEvents,
+      attributionWindowDays,
+      viewThroughWindowHours,
+    },
+  });
 }

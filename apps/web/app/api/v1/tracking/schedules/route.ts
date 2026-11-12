@@ -1,11 +1,13 @@
 // GET & POST /api/v1/tracking/schedules
 // Reference: docs/API_CONTRACT.md & docs/TECHNICAL_BLUEPRINT.md
+// Hardened against Audit Finding 5 (Tenant Authorization for Schedules)
 
 import { NextRequest } from 'next/server';
 import {
   formatSuccessResponse,
   formatErrorResponse,
   getAuthenticatedUser,
+  assertProjectAccess,
 } from '@/lib/api-handler';
 import {
   getTrackingSchedule,
@@ -31,6 +33,9 @@ export async function GET(request: NextRequest) {
     if (!projectId) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
+
+    // Verify tenant membership and project access (ANALYST can view)
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'ANALYST');
 
     const schedule = await getTrackingSchedule(orgId, projectId);
     return formatSuccessResponse(schedule);
@@ -58,12 +63,14 @@ export async function POST(request: NextRequest) {
       return formatErrorResponse(new Error('projectId is required'), 'Bad request', 'VALIDATION_ERROR', 400);
     }
 
+    // Verify tenant membership and project access (ADMIN required to alter automation schedules)
+    await assertProjectAccess(orgId, projectId, user.id, undefined, 'ADMIN');
+
     const validated = SaveTrackingScheduleSchema.parse(body);
-    const schedule = await saveTrackingSchedule(orgId, projectId, validated);
+    const schedule = await saveTrackingSchedule(orgId, projectId, validated, user.id);
 
     return formatSuccessResponse(schedule);
   } catch (err) {
     return formatErrorResponse(err);
   }
 }
-

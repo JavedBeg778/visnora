@@ -17,6 +17,19 @@ export class ReportingHistoryLimitError extends Error {
 /**
  * Calculates aggregate performance overview for an organization's ChatGPT Ads.
  */
+function formatAccountCurrency(amount: number, currency: string): string {
+  const symbols: Record<string, string> = {
+    USD: '$',
+    INR: '₹',
+    EUR: '€',
+    GBP: '£',
+    AUD: 'A$',
+    CAD: 'C$',
+  };
+  const sym = symbols[currency?.toUpperCase()] || `${(currency || 'USD').toUpperCase()} `;
+  return `${sym}${amount.toFixed(2)}`;
+}
+
 export async function getPerformanceOverview(input: AnalyticsQueryInput): Promise<PerformanceOverview> {
   const { organizationId, accountId, campaignId, startDate, endDate } = input;
 
@@ -54,18 +67,21 @@ export async function getPerformanceOverview(input: AnalyticsQueryInput): Promis
     ? await prisma.chatGPTAdsAccount.findFirst({ where: { id: accountId, organizationId } })
     : null;
 
+  const currency = account?.currency || 'USD';
+
   if (insights.length === 0) {
     return {
       impressions: 0,
       clicks: 0,
       spendPaise: '0',
-      spendFormatted: '$0.00',
+      spendFormatted: formatAccountCurrency(0, currency),
       conversions: 0,
       attributedSalesPaise: '0',
-      attributedSalesFormatted: '$0.00',
+      attributedSalesFormatted: formatAccountCurrency(0, currency),
       ctr: 0,
-      cpcFormatted: '$0.00',
-      cpaFormatted: '$0.00',
+      cpcFormatted: formatAccountCurrency(0, currency),
+      cpaFormatted: formatAccountCurrency(0, currency),
+      currency,
       roas: 0,
       isFinal: true,
       freshnessStatus: account?.lastSyncAt ? 'FRESH' : 'UNAVAILABLE',
@@ -92,7 +108,7 @@ export async function getPerformanceOverview(input: AnalyticsQueryInput): Promis
   }
 
   const ctr = totalImpressions > 0 ? Number(((totalClicks / totalImpressions) * 100).toFixed(2)) : 0;
-  const spendNum = Number(totalSpendPaise) / 100; // in dollar units
+  const spendNum = Number(totalSpendPaise) / 100;
   const cpcNum = totalClicks > 0 ? spendNum / totalClicks : 0;
   const cpaNum = totalConversions > 0 ? spendNum / totalConversions : 0;
   const salesNum = Number(totalAttributedSalesPaise) / 100;
@@ -102,13 +118,14 @@ export async function getPerformanceOverview(input: AnalyticsQueryInput): Promis
     impressions: totalImpressions,
     clicks: totalClicks,
     spendPaise: totalSpendPaise.toString(),
-    spendFormatted: `$${spendNum.toFixed(2)}`,
+    spendFormatted: formatAccountCurrency(spendNum, currency),
     conversions: totalConversions,
     attributedSalesPaise: totalAttributedSalesPaise.toString(),
-    attributedSalesFormatted: `$${salesNum.toFixed(2)}`,
+    attributedSalesFormatted: formatAccountCurrency(salesNum, currency),
     ctr,
-    cpcFormatted: `$${cpcNum.toFixed(2)}`,
-    cpaFormatted: `$${cpaNum.toFixed(2)}`,
+    cpcFormatted: formatAccountCurrency(cpcNum, currency),
+    cpaFormatted: formatAccountCurrency(cpaNum, currency),
+    currency,
     roas,
     isFinal: isAllFinal,
     freshnessStatus: isAllFinal ? 'FRESH' : 'DELAYED',

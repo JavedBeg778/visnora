@@ -1,5 +1,11 @@
 {
   "framework": "nextjs",
-  "outputDirectory": "apps/web/.next"
+  "outputDirectory": "apps/web/.next",
+  "crons": [
+    {
+      "path": "/api/v1/tracking/cron",
+      "schedule": "0 * * * *"
+    }
+  ]
 }
 

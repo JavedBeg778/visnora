@@ -121,6 +121,9 @@ export interface PaymentVerificationRequest {
   providerSignature?: string;
   simulateFailure?: boolean;
   failureReason?: string;
+  planSlug?: PlanSlug;
+  customerEmail?: string;
+  customerName?: string;
 }
 
 export interface PaymentVerificationResult {

@@ -1,0 +1,46 @@
+# Visnora — Render Infrastructure as Code Blueprint
+# Defines the durable background worker service on Render
+# Reference: docs/BACKGROUND_WORKER_DEPLOYMENT.md
+
+services:
+  # 1. Background Worker Service (BullMQ persistent processor)
+  - type: worker
+    name: visnora-background-worker
+    runtime: node
+    plan: starter
+    region: oregon
+    buildCommand: npm install && npx prisma generate --schema=packages/database/prisma/schema.prisma
+    startCommand: npm run worker
+    autoDeploy: false
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: WORKER_CONCURRENCY
+        value: "2"
+      - key: WORKER_PORT
+        value: "8080"
+      - key: REDIS_TLS
+        value: "true"
+      - key: REDIS_REJECT_UNAUTHORIZED
+        value: "true"
+
+      # Sensitive Production Variables (Set in Render Dashboard / Secret Manager)
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+

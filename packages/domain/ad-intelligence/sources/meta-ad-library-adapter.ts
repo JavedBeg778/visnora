@@ -207,6 +207,8 @@ export class MetaAdLibraryAdapter implements AdSourceAdapter {
           caption: headline,
         },
       ],
+      isSampleData: false,
+      provenance: 'LIVE_API',
       rawMetadata: {
         publisherPlatforms: item.publisher_platforms,
         creationTime: item.ad_creation_time,
@@ -216,7 +218,7 @@ export class MetaAdLibraryAdapter implements AdSourceAdapter {
 
   private getPermittedAdsFallback(query: string, limit: number): NormalizedAdRecord[] {
     const qLower = query.toLowerCase();
-    const samplePool: NormalizedAdRecord[] = [
+    const rawSamplePool: NormalizedAdRecord[] = [
       {
         externalAdId: 'meta_swiggy_ad_001',
         platform: 'META_ADS',
@@ -319,6 +321,12 @@ export class MetaAdLibraryAdapter implements AdSourceAdapter {
       },
     ];
 
+    const samplePool = rawSamplePool.map((ad) => ({
+      ...ad,
+      isSampleData: true,
+      provenance: 'SAMPLE_FALLBACK' as const,
+    }));
+
     if (!qLower) {
       return samplePool.slice(0, limit);
     }
@@ -351,6 +359,8 @@ export class MetaAdLibraryAdapter implements AdSourceAdapter {
       lastSeenAt: new Date(),
       contentHash: crypto.createHash('sha256').update(`${query}|Official Campaign|Learn More`).digest('hex'),
       status: 'ACTIVE',
+      isSampleData: true,
+      provenance: 'SAMPLE_FALLBACK',
       creatives: [
         {
           mediaType: 'IMAGE',

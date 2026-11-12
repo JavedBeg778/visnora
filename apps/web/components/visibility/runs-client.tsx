@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import {
   History,
@@ -35,6 +35,17 @@ export function RunsClient({
   const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId);
   const [running, setRunning] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const pollTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Audit Finding 8: Clean up active polling intervals on unmount
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+  }, []);
 
   const refreshRuns = async (projId: string) => {
     try {
@@ -79,6 +90,10 @@ export function RunsClient({
 
         const runId = json.data.id || json.data.trackingRunId;
         if (runId) {
+          if (pollTimerRef.current) {
+            clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+          }
           let attempts = 0;
           const maxAttempts = 24;
           const pollInterval = setInterval(async () => {
@@ -92,6 +107,7 @@ export function RunsClient({
                 const r = runJson.data;
                 if (r.status === 'COMPLETED' || r.status === 'PARTIALLY_COMPLETED' || r.status === 'PARTIAL' || r.status === 'FAILED') {
                   clearInterval(pollInterval);
+                  pollTimerRef.current = null;
                   setRunning(false);
                   await refreshRuns(selectedProjectId);
                   setMessage(`Tracking run complete! Evaluated ${r.successCount}/${r.promptCount} prompt query sample(s).`);
@@ -103,10 +119,12 @@ export function RunsClient({
 
             if (attempts >= maxAttempts) {
               clearInterval(pollInterval);
+              pollTimerRef.current = null;
               setRunning(false);
               await refreshRuns(selectedProjectId);
             }
           }, 2500);
+          pollTimerRef.current = pollInterval;
         } else {
           setRunning(false);
         }

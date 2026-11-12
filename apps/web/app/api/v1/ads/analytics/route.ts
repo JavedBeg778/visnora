@@ -63,8 +63,29 @@ export async function GET(request: NextRequest) {
       firstSeenAt: a.firstSeenAt,
     }));
 
-    // If no ads in DB yet, provide sample intelligence for dashboard demonstration
+    // If no ads in DB yet, show genuine empty state unless explicit demo requested
     if (normalizedAds.length === 0) {
+      const allowDemo = searchParams.get('demo') === 'true';
+      if (!allowDemo) {
+        return formatSuccessResponse({
+          competitorId: competitorId || 'comp_all',
+          competitorName: competitorInfo?.name || 'All Competitors',
+          competitorDomain: competitorInfo?.domain || '',
+          totalAdsDiscovered: 0,
+          activeAdsCount: 0,
+          hasRealData: false,
+          isSampleData: false,
+          dataProvenance: 'DATABASE_LIVE',
+          platformDistribution: [],
+          formatDistribution: [],
+          topCtas: [],
+          activeOffers: [],
+          commonThemes: [],
+          topLandingPages: [],
+          message: 'No competitor advertisements discovered yet for this project. Trigger an ad sync or submit competitor URLs to generate intelligence.',
+        });
+      }
+
       const sampleAds = [
         {
           externalAdId: 'meta_swiggy_ad_001',
@@ -120,13 +141,18 @@ export async function GET(request: NextRequest) {
         },
       ];
 
-      const analytics = CompetitorAdAnalyticsService.calculateCompetitorSummary(
+      const sampleAnalytics = CompetitorAdAnalyticsService.calculateCompetitorSummary(
         competitorId || 'comp_all',
         sampleAds,
-        competitorInfo || { name: 'Competitor Benchmark', domain: 'market-benchmark.com' }
+        competitorInfo || { name: 'Demo Benchmark', domain: 'demo-benchmark.com' }
       );
 
-      return formatSuccessResponse(analytics);
+      return formatSuccessResponse({
+        ...sampleAnalytics,
+        hasRealData: false,
+        isSampleData: true,
+        dataProvenance: 'SAMPLE_FALLBACK',
+      });
     }
 
     const analytics = CompetitorAdAnalyticsService.calculateCompetitorSummary(
@@ -135,7 +161,12 @@ export async function GET(request: NextRequest) {
       competitorInfo
     );
 
-    return formatSuccessResponse(analytics);
+    return formatSuccessResponse({
+      ...analytics,
+      hasRealData: true,
+      isSampleData: false,
+      dataProvenance: 'DATABASE_LIVE',
+    });
   } catch (err) {
     return formatErrorResponse(err);
   }

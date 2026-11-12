@@ -4,6 +4,7 @@
 import { prisma } from '../../database/src/client';
 import { OrgRole } from '../../shared/types';
 import { assertPermission, hasPermission, ForbiddenError } from '../../shared/permissions/rbac';
+import { recordAuditEvent } from '../security/audit-logger';
 
 export { ForbiddenError };
 
@@ -312,19 +313,70 @@ export async function updateMemberRole(
     throw new NotFoundError('Member record not found in this organization.');
   }
 
+  // Audit Finding 1 & 6: Prevent self-role modification / privilege escalation
+  if (targetMember.userId === actorUserId) {
+    throw new ForbiddenError('Users cannot modify their own role. Another administrator or owner must perform this action.');
+  }
+
   // Admins cannot change Owner's role, and cannot promote to Owner (only Owner can transfer ownership)
   if (targetMember.role === 'OWNER') {
     throw new ForbiddenError('Owner role cannot be modified. Ownership transfer required.');
   }
 
-  if (newRole === 'OWNER' && actorMembership.role !== 'OWNER') {
-    throw new ForbiddenError('Only the Organization Owner can grant Owner privileges.');
+  // Enforce single-owner ownership transfer
+  if (newRole === 'OWNER') {
+    if (actorMembership.role !== 'OWNER') {
+      throw new ForbiddenError('Only the Organization Owner can grant Owner privileges or transfer ownership.');
+    }
+
+    // Atomically transfer ownership: demote actor to ADMIN, promote target to OWNER
+    return await prisma.$transaction(async (tx) => {
+      await tx.organizationMember.update({
+        where: { id: actorMembership.id },
+        data: { role: 'ADMIN' },
+      });
+
+      const updated = await tx.organizationMember.update({
+        where: { id: memberId },
+        data: { role: 'OWNER' },
+      });
+
+      await recordAuditEvent(tx, {
+        organizationId,
+        actorUserId,
+        action: 'OWNERSHIP_TRANSFERRED',
+        targetEntity: 'MEMBERSHIP',
+        targetId: memberId,
+        metadata: {
+          previousOwnerMemberId: actorMembership.id,
+          newOwnerMemberId: memberId,
+          newOwnerUserId: targetMember.userId,
+        },
+      });
+
+      return updated;
+    });
   }
 
-  return await prisma.organizationMember.update({
+  const updated = await prisma.organizationMember.update({
     where: { id: memberId },
     data: { role: newRole as any },
   });
+
+  await recordAuditEvent(prisma, {
+    organizationId,
+    actorUserId,
+    action: 'MEMBER_ROLE_UPDATED',
+    targetEntity: 'MEMBERSHIP',
+    targetId: memberId,
+    metadata: {
+      targetUserId: targetMember.userId,
+      oldRole: targetMember.role,
+      newRole,
+    },
+  });
+
+  return updated;
 }
 
 export async function removeMember(
@@ -354,16 +406,35 @@ export async function removeMember(
   }
 
   if (targetMember.role === 'OWNER') {
-    throw new ForbiddenError('The Organization Owner cannot be removed.');
+    throw new ForbiddenError('The Organization Owner cannot be removed or leave without transferring ownership.');
   }
 
-  // Allow members to remove themselves (leave), or Admins/Owners to remove members
+  // Audit Finding 1 & 6: Member removal authorization
   if (targetMember.userId !== actorUserId) {
     assertPermission(actorMembership.role as OrgRole, 'ADMIN');
+
+    // Admins cannot remove other Admins — only Owner can remove Admins
+    if (targetMember.role === 'ADMIN' && actorMembership.role !== 'OWNER') {
+      throw new ForbiddenError('Administrators cannot remove other administrators. Only the organization owner can remove an administrator.');
+    }
   }
 
-  return await prisma.organizationMember.delete({
+  const deleted = await prisma.organizationMember.delete({
     where: { id: memberId },
   });
+
+  await recordAuditEvent(prisma, {
+    organizationId,
+    actorUserId,
+    action: targetMember.userId === actorUserId ? 'MEMBER_LEFT' : 'MEMBER_REMOVED',
+    targetEntity: 'MEMBERSHIP',
+    targetId: memberId,
+    metadata: {
+      targetUserId: targetMember.userId,
+      role: targetMember.role,
+    },
+  });
+
+  return deleted;
 }
 

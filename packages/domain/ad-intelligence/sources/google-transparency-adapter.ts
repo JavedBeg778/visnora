@@ -107,7 +107,7 @@ export class GoogleTransparencyAdapter implements AdSourceAdapter {
 
   private getPermittedGoogleAds(query: string, limit: number): NormalizedAdRecord[] {
     const qLower = query.toLowerCase();
-    const samplePool: NormalizedAdRecord[] = [
+    const rawSamplePool: NormalizedAdRecord[] = [
       {
         externalAdId: 'goog_swiggy_search_001',
         platform: 'GOOGLE_ADS',
@@ -210,6 +210,12 @@ export class GoogleTransparencyAdapter implements AdSourceAdapter {
       },
     ];
 
+    const samplePool = rawSamplePool.map((ad) => ({
+      ...ad,
+      isSampleData: true,
+      provenance: 'SAMPLE_FALLBACK' as const,
+    }));
+
     if (!qLower) {
       return samplePool.slice(0, limit);
     }
@@ -243,6 +249,8 @@ export class GoogleTransparencyAdapter implements AdSourceAdapter {
         lastSeenAt: new Date(),
         contentHash: crypto.createHash('sha256').update(`${query}|Official Google Ad|Visit Site`).digest('hex'),
         status: 'ACTIVE',
+        isSampleData: true,
+        provenance: 'SAMPLE_FALLBACK',
         creatives: [
           {
             mediaType: 'TEXT',

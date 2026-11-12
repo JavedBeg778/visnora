@@ -39,6 +39,46 @@ export const GEMINI_3_5_FLASH_LITE_PRICING: ModelPricingTier = {
   pricingNotes: 'Ultra-budget high-scale model for high-frequency prompt monitoring.',
 };
 
+export const OPENAI_GPT4O_MINI_PRICING: ModelPricingTier = {
+  modelId: 'gpt-4o-mini',
+  provider: 'OpenAI',
+  inputCostPer1MUsd: 0.15,
+  outputCostPer1MUsd: 0.60,
+  groundingCostPer1KQueriesUsd: 0.0,
+  freeGroundingQueriesMonthly: 0,
+  dailyQueryCap: 5000,
+  pricingNotes: 'OpenAI efficient standard model for classification and visibility.',
+};
+
+export const OPENAI_GPT4O_PRICING: ModelPricingTier = {
+  modelId: 'gpt-4o',
+  provider: 'OpenAI',
+  inputCostPer1MUsd: 2.50,
+  outputCostPer1MUsd: 10.00,
+  groundingCostPer1KQueriesUsd: 0.0,
+  freeGroundingQueriesMonthly: 0,
+  dailyQueryCap: 5000,
+  pricingNotes: 'OpenAI flagship multimodal reasoning model.',
+};
+
+export function getModelPricing(provider: string, modelId: string): ModelPricingTier {
+  const normProvider = (provider || '').toLowerCase();
+  const normModel = (modelId || '').toLowerCase();
+
+  if (normProvider.includes('openai') || normModel.startsWith('gpt')) {
+    if (normModel.includes('mini')) {
+      return OPENAI_GPT4O_MINI_PRICING;
+    }
+    return OPENAI_GPT4O_PRICING;
+  }
+
+  if (normModel.includes('lite')) {
+    return GEMINI_3_5_FLASH_LITE_PRICING;
+  }
+
+  return GEMINI_3_8_FLASH_PRICING;
+}
+
 export interface PromptExecutionScenario {
   scenarioName: string;
   promptCount: number;

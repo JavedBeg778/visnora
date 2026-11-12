@@ -27,7 +27,13 @@ export function formatSuccessResponse<T>(data: T, status = 200) {
         timestamp: new Date().toISOString(),
       },
     },
-    { status }
+    {
+      status,
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      },
+    }
   );
 }
 
@@ -76,7 +82,24 @@ export function formatErrorResponse(
     code = 'VALIDATION_ERROR';
     message = error.message;
   } else if (error instanceof Error) {
-    message = error.message;
+    // Audit Finding 9: Sanitize internal server errors in production to avoid leaking SQL/stack traces
+    if (status >= 500) {
+      console.error(`[API Internal Error ${traceId}]:`, error);
+      if (process.env.NODE_ENV === 'production') {
+        message = 'An unexpected internal error occurred. Please contact support with reference ID ' + traceId + '.';
+      } else {
+        message = error.message;
+      }
+    } else {
+      message = error.message;
+    }
+  }
+
+  // Ensure 500 messages never expose raw SQL/DB schema errors even if thrown as non-Error object
+  if (status >= 500 && process.env.NODE_ENV === 'production') {
+    if (!message || message.includes('SELECT') || message.includes('Prisma') || message.includes('database')) {
+      message = 'An unexpected internal error occurred. Please contact support with reference ID ' + traceId + '.';
+    }
   }
 
   return NextResponse.json(
@@ -89,7 +112,13 @@ export function formatErrorResponse(
         ...(details ? { details } : {}),
       },
     },
-    { status }
+    {
+      status,
+      headers: {
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      },
+    }
   );
 }
 

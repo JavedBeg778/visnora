@@ -7,7 +7,7 @@ import { GeminiAdapter } from '../../integrations/ai-providers/gemini';
 import { OpenAIAdapter } from '../../integrations/ai-providers/openai';
 import { analyzeAiResponse } from './analysis-service';
 import { generateRecommendationsForRun } from './recommendation-service';
-import { USD_TO_INR_EXCHANGE_RATE, GEMINI_3_8_FLASH_PRICING, GEMINI_3_5_FLASH_LITE_PRICING } from '../billing/cost-calculator';
+import { USD_TO_INR_EXCHANGE_RATE, GEMINI_3_8_FLASH_PRICING, GEMINI_3_5_FLASH_LITE_PRICING, getModelPricing } from '../billing/cost-calculator';
 import { reservePromptQuota, recordPromptUsage, releaseReservedQuota, QuotaExceededError } from '../billing/usage-meter';
 import { BrandEntity } from './types';
 
@@ -27,16 +27,15 @@ export interface TrackingRunOptions {
 export function estimateTrackingRunCost(
   promptCount: number,
   modelId = 'gemini-3.8-flash',
-  enableGrounding = false
+  enableGrounding = false,
+  provider = 'google-gemini'
 ) {
   const avgInputTokens = 150;
   const avgOutputTokens = 450;
   const totalInputTokens = promptCount * avgInputTokens;
   const totalOutputTokens = promptCount * avgOutputTokens;
 
-  const pricing = modelId.includes('lite')
-    ? GEMINI_3_5_FLASH_LITE_PRICING
-    : GEMINI_3_8_FLASH_PRICING;
+  const pricing = getModelPricing(provider, modelId);
 
   const inputCostUsd = (totalInputTokens / 1_000_000) * pricing.inputCostPer1MUsd;
   const outputCostUsd = (totalOutputTokens / 1_000_000) * pricing.outputCostPer1MUsd;
@@ -289,11 +288,12 @@ export async function executeTrackingRunPrompts(params: {
           timeoutMs: 25000,
         });
 
-        const inTokens = result.tokenUsage?.inputTokens || 150;
-        const outTokens = result.tokenUsage?.outputTokens || (result.status === 'COMPLETED' ? 450 : 0);
+        const hasRealTokenUsage = Boolean(result.tokenUsage && (result.tokenUsage.inputTokens || result.tokenUsage.outputTokens));
+        const inTokens = result.tokenUsage?.inputTokens ?? (dryRun ? 150 : 0);
+        const outTokens = result.tokenUsage?.outputTokens ?? (result.status === 'COMPLETED' ? (dryRun ? 450 : 0) : 0);
         const isCompleted = result.status === 'COMPLETED' || result.status === 'DRY_RUN';
 
-        const pricing = model.includes('lite') ? GEMINI_3_5_FLASH_LITE_PRICING : GEMINI_3_8_FLASH_PRICING;
+        const pricing = getModelPricing(provider, model);
         const costUsd =
           (inTokens / 1_000_000) * pricing.inputCostPer1MUsd +
           (outTokens / 1_000_000) * pricing.outputCostPer1MUsd;
@@ -390,7 +390,7 @@ export async function executeTrackingRunPrompts(params: {
               outputTokens: outTokens,
               estimatedCostPaise: costPaise,
               actualCostPaise: costPaise,
-              isEstimated: dryRun,
+              isEstimated: !hasRealTokenUsage || dryRun,
             },
           });
 

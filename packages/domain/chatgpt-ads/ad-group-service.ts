@@ -3,6 +3,7 @@
 
 import { prisma } from '../../database/src/client';
 import { assertEntitlement } from '../billing/entitlements';
+import { getClientForAccount } from './account-service';
 import { CreateAdGroupInput } from './types';
 
 export class AdGroupNotFoundError extends Error {
@@ -29,7 +30,35 @@ export async function createAdGroup(input: CreateAdGroupInput) {
     throw new Error(`Campaign "${campaignId}" not found or unauthorized.`);
   }
 
-  const openaiAdGroupId = `adgrp_${Date.now()}`;
+  // Synchronize with OpenAI Ads API — require verified provider ad group creation
+  let client;
+  try {
+    client = await getClientForAccount(organizationId, campaign.accountId);
+  } catch (err: any) {
+    throw new Error(`NOT_CONFIGURED: OpenAI Ads API client could not be initialized: ${err.message}`);
+  }
+
+  let remoteAdGroup;
+  try {
+    remoteAdGroup = await client.createAdGroup({
+      campaign_id: campaign.openaiCampaignId,
+      name,
+      status: 'PAUSED',
+      bidding: {
+        strategy: (bidStrategy as any) || 'MAXIMIZE_CLICKS',
+        bid_amount: bidAmountPaise ? Number(bidAmountPaise) / 100 : undefined,
+      },
+      context_hints: contextHints || [],
+    });
+  } catch (err: any) {
+    throw new Error(`BLOCKED_EXTERNAL_DEPENDENCY: OpenAI Ads remote ad group creation failed: ${err.message}`);
+  }
+
+  if (!remoteAdGroup?.id) {
+    throw new Error('BLOCKED_EXTERNAL_DEPENDENCY: OpenAI Ads API did not return a valid ad group ID.');
+  }
+
+  const openaiAdGroupId = remoteAdGroup.id;
 
   const adGroup = await prisma.chatGPTAdsAdGroup.create({
     data: {

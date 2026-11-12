@@ -47,3 +47,9 @@ Thumbs.db
 
 .vercel
 .env*
+
+# TypeScript build cache
+*.tsbuildinfo
+test-results/
+playwright-report/
+tsconfig.tsbuildinfo

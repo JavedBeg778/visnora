@@ -120,6 +120,7 @@ export interface PerformanceOverview {
   ctr: number;
   cpcFormatted: string;
   cpaFormatted: string;
+  currency?: string;
   roas: number;
   isFinal: boolean;
   freshnessStatus: 'FRESH' | 'DELAYED' | 'UNAVAILABLE';

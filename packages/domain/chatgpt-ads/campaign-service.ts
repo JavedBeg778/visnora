@@ -1,6 +1,7 @@
 // Visnora — ChatGPT Ads Campaign Management Service
 // Enforces default 'PAUSED' state, financial confirmation, and tenant isolation
 
+import crypto from 'crypto';
 import { prisma } from '../../database/src/client';
 import { assertEntitlement } from '../billing/entitlements';
 import { getClientForAccount } from './account-service';
@@ -70,11 +71,17 @@ export async function createCampaign(input: CreateCampaignInput) {
     throw new Error(`Account "${accountId}" not found or unauthorized.`);
   }
 
-  // 4. Optionally synchronize with OpenAI Ads API
-  let openaiCampaignId = `camp_${Date.now()}`;
+  // 4. Synchronize with OpenAI Ads API — require verified provider campaign creation
+  let client;
   try {
-    const client = await getClientForAccount(organizationId, accountId);
-    const remoteCampaign = await client.createCampaign({
+    client = await getClientForAccount(organizationId, accountId);
+  } catch (err: any) {
+    throw new Error(`NOT_CONFIGURED: OpenAI Ads API client could not be initialized: ${err.message}`);
+  }
+
+  let remoteCampaign;
+  try {
+    remoteCampaign = await client.createCampaign({
       name,
       objective: objective as any,
       budget: {
@@ -84,14 +91,18 @@ export async function createCampaign(input: CreateCampaignInput) {
       },
       status: 'PAUSED',
     });
-    if (remoteCampaign?.id) {
-      openaiCampaignId = remoteCampaign.id;
-    }
   } catch (err: any) {
-    console.warn('[CampaignService] OpenAI Ads API remote call note:', err.message);
+    throw new Error(`BLOCKED_EXTERNAL_DEPENDENCY: OpenAI Ads remote campaign creation failed: ${err.message}`);
   }
 
-  // 5. Persist campaign with STRICT status: 'PAUSED'
+  if (!remoteCampaign?.id) {
+    throw new Error('BLOCKED_EXTERNAL_DEPENDENCY: OpenAI Ads API did not return a valid campaign ID.');
+  }
+
+  const openaiCampaignId = remoteCampaign.id;
+  const deliveryStatus = 'SYNCED';
+
+  // 5. Persist campaign with verified provider campaign ID and STRICT status: 'PAUSED'
   const campaign = await prisma.chatGPTAdsCampaign.create({
     data: {
       organizationId,
@@ -99,6 +110,7 @@ export async function createCampaign(input: CreateCampaignInput) {
       name,
       openaiCampaignId,
       status: 'PAUSED', // Non-negotiable default
+      deliveryStatus,
       objective,
       budgetAmountPaise: budgetVal,
       budgetType,

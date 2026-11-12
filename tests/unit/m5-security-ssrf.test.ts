@@ -39,10 +39,17 @@ describe('Phase 9 — Deep SSRF & Network Security Verification', () => {
       expect(isSafePublicUrl('https://[fe80::200:5efe:10.0.0.1]/')).toBe(false);
     });
 
-    it('blocks IPv4-mapped IPv6 addresses', () => {
+    it('blocks IPv4-mapped IPv6 addresses (dot-decimal and hex)', () => {
       expect(isSafePublicUrl('http://[::ffff:127.0.0.1]/')).toBe(false);
       expect(isSafePublicUrl('http://[::ffff:169.254.169.254]/')).toBe(false);
       expect(isSafePublicUrl('http://[::ffff:10.0.0.1]/')).toBe(false);
+      expect(isSafePublicUrl('http://[::ffff:7f00:0001]/')).toBe(false);
+      expect(isSafePublicUrl('http://[::ffff:a9fe:a9fe]/')).toBe(false);
+    });
+
+    it('blocks IPv6 multicast and expanded loopback variations', () => {
+      expect(isSafePublicUrl('http://[0000:0000:0000:0000:0000:0000:0000:0001]/')).toBe(false);
+      expect(isSafePublicUrl('http://[ff02::1]/')).toBe(false);
     });
   });
 

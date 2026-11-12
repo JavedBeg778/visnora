@@ -58,14 +58,28 @@ function isPrivateIpv4(ip: string): boolean {
 function isPrivateIpv6(rawIpv6: string): boolean {
   let ip = rawIpv6.toLowerCase().replace(/^\[|\]$/g, '').trim();
 
-  // Loopback (::1, 0000:...:0001)
+  // Loopback (::1, 0000:...:0001, ::)
   if (ip === '::1' || ip === '::' || /^0*(:0*)*:1$/.test(ip)) return true;
+  const digitsOnly = ip.replace(/:/g, '');
+  if (/^0*1$/.test(digitsOnly)) return true;
 
-  // IPv4-mapped IPv6 (::ffff:127.0.0.1 or ::ffff:7f00:1)
+  // IPv4-mapped IPv6 (e.g. ::ffff:127.0.0.1 or ::ffff:7f00:1 or ::ffff:a9fe:a9fe)
   if (ip.startsWith('::ffff:')) {
     const mapped = ip.slice(7);
     if (mapped.includes('.')) {
       return isPrivateIpv4(mapped);
+    }
+    const hexParts = mapped.split(':');
+    if (hexParts.length === 2) {
+      const h1 = parseInt(hexParts[0], 16);
+      const h2 = parseInt(hexParts[1], 16);
+      if (!isNaN(h1) && !isNaN(h2)) {
+        const a = (h1 >> 8) & 255;
+        const b = h1 & 255;
+        const c = (h2 >> 8) & 255;
+        const d = h2 & 255;
+        return isPrivateIpv4(`${a}.${b}.${c}.${d}`);
+      }
     }
   }
 
@@ -77,6 +91,9 @@ function isPrivateIpv6(rawIpv6: string): boolean {
 
   // Site-Local (fec0::/10 - deprecated but blocked)
   if (/^fe[c-f]/i.test(ip)) return true;
+
+  // Multicast (ff00::/8)
+  if (ip.startsWith('ff')) return true;
 
   // Discard prefix (100::/64)
   if (ip.startsWith('100::')) return true;
@@ -240,6 +257,14 @@ export function isSafePublicUrl(rawUrl: string): boolean {
  * that resolves to 127.0.0.1 or 169.254.169.254.
  */
 export async function resolveAndValidateHost(hostname: string): Promise<boolean> {
+  // If hostname is already an IP literal, validate directly
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) {
+    return !isPrivateIpv4(hostname);
+  }
+  if (hostname.includes(':') || hostname.startsWith('[')) {
+    return !isPrivateIpv6(hostname);
+  }
+
   return new Promise((resolve) => {
     dns.lookup(hostname, { all: true }, (err, addresses) => {
       if (err || !addresses || addresses.length === 0) {

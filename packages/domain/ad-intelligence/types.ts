@@ -60,6 +60,8 @@ export interface NormalizedAdRecord {
   status: AdStatusType;
   creatives?: AdCreativeAsset[];
   landingPage?: AdLandingPageInfo;
+  isSampleData?: boolean;
+  provenance?: 'LIVE_API' | 'MANUAL_URL' | 'SAMPLE_FALLBACK';
   rawMetadata?: Record<string, any>;
 }
 

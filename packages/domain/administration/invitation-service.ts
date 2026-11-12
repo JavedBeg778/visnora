@@ -1,13 +1,16 @@
 // Visnora — Team Invitation Domain Service
 // Reference: docs/TECHNICAL_BLUEPRINT.md & docs/SECURITY.md
+// Hardened against Audit Findings 4, 5, 6, 12
 
 import crypto from 'crypto';
 import { prisma } from '../../database/src/client';
 import { OrgRole } from '../../shared/types';
 import { assertPermission, ForbiddenError } from '../../shared/permissions/rbac';
 import { NotFoundError, ValidationError } from '../organizations/service';
+import { recordAuditEvent } from '../security/audit-logger';
 
 const INVITATION_EXPIRY_DAYS = 7;
+const ALLOWED_INVITE_ROLES: OrgRole[] = ['ADMIN', 'MEMBER', 'VIEWER'];
 
 async function verifyAdminOrOwner(organizationId: string, userId: string) {
   const membership = await prisma.organizationMember.findUnique({
@@ -32,9 +35,23 @@ export async function createInvitation(
   actorUserId: string,
   data: { email: string; role: OrgRole }
 ) {
-  await verifyAdminOrOwner(organizationId, actorUserId);
+  const actorMembership = await verifyAdminOrOwner(organizationId, actorUserId);
 
   const cleanEmail = data.email.toLowerCase().trim();
+
+  // Audit Finding 6: Restrict OWNER invitation and enforce role hierarchy
+  if ((data.role as string) === 'OWNER') {
+    throw new ValidationError('Cannot invite a member with OWNER role. Ownership must be transferred by an existing owner.');
+  }
+
+  if (!ALLOWED_INVITE_ROLES.includes(data.role)) {
+    throw new ValidationError(`Invalid invitation role "${data.role}". Allowed roles are: ${ALLOWED_INVITE_ROLES.join(', ')}.`);
+  }
+
+  // Only the current OWNER can invite an ADMIN
+  if (data.role === 'ADMIN' && actorMembership.role !== 'OWNER') {
+    throw new ForbiddenError('Only the Organization Owner can invite administrators.');
+  }
 
   // Check if email already belongs to an active member
   const existingProfiles = await prisma.userProfile.findMany({
@@ -85,6 +102,20 @@ export async function createInvitation(
       organization: {
         select: { name: true },
       },
+    },
+  });
+
+  // Record audit log entry
+  await recordAuditEvent(prisma, {
+    organizationId,
+    actorUserId,
+    action: 'INVITATION_CREATED',
+    targetEntity: 'INVITATION',
+    targetId: invitation.id,
+    metadata: {
+      email: cleanEmail,
+      role: data.role,
+      expiresAt: expiresAt.toISOString(),
     },
   });
 
@@ -145,10 +176,25 @@ export async function revokeInvitation(
     throw new NotFoundError('Invitation not found.');
   }
 
-  return await prisma.invitation.update({
+  const updated = await prisma.invitation.update({
     where: { id: invitation.id },
     data: { status: 'REVOKED' },
   });
+
+  // Record audit log entry
+  await recordAuditEvent(prisma, {
+    organizationId,
+    actorUserId,
+    action: 'INVITATION_REVOKED',
+    targetEntity: 'INVITATION',
+    targetId: invitation.id,
+    metadata: {
+      email: invitation.email,
+      role: invitation.role,
+    },
+  });
+
+  return updated;
 }
 
 export async function getInvitationByToken(token: string) {
@@ -185,14 +231,54 @@ export async function acceptInvitation(
   userId: string,
   userEmail: string
 ) {
-  const invite = await getInvitationByToken(token);
+  const cleanUserEmail = userEmail.toLowerCase().trim();
 
-  if (!invite.isValid) {
-    throw new ValidationError(`Cannot accept invitation: It is ${invite.status.toLowerCase()}.`);
-  }
-
-  // Transactionally add member and update invitation status
+  // Audit Finding 4 & 5: Atomic, race-condition protected transaction with email identity verification
   return await prisma.$transaction(async (tx) => {
+    // 1. Fetch invitation within transaction
+    const invite = await tx.invitation.findUnique({
+      where: { token },
+      include: {
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (!invite) {
+      throw new NotFoundError('Invalid invitation link.');
+    }
+
+    if (new Date() > invite.expiresAt) {
+      throw new ValidationError('Cannot accept invitation: It is expired.');
+    }
+
+    if (invite.status !== 'PENDING') {
+      throw new ValidationError(`Cannot accept invitation: It is ${invite.status.toLowerCase()}.`);
+    }
+
+    // Audit Finding 4: Verify email matches authenticated user
+    const cleanInviteEmail = invite.email.toLowerCase().trim();
+    if (cleanUserEmail !== cleanInviteEmail) {
+      throw new ForbiddenError(
+        `Cannot accept invitation: Authenticated user email (${cleanUserEmail}) does not match invitation recipient (${cleanInviteEmail}).`
+      );
+    }
+
+    // Audit Finding 5: Atomically acquire and update status to prevent concurrent double-acceptance
+    const updateResult = await tx.invitation.updateMany({
+      where: {
+        token,
+        status: 'PENDING',
+        expiresAt: { gt: new Date() },
+      },
+      data: { status: 'ACCEPTED' },
+    });
+
+    if (updateResult.count === 0) {
+      throw new ValidationError('Invitation was already accepted or is no longer valid.');
+    }
+
     // Check if already a member
     const existing = await tx.organizationMember.findUnique({
       where: {
@@ -223,16 +309,24 @@ export async function acceptInvitation(
       });
     }
 
-    // Mark invitation accepted
-    await tx.invitation.update({
-      where: { token },
-      data: { status: 'ACCEPTED' },
+    // Record immutable audit event
+    await recordAuditEvent(tx, {
+      organizationId: invite.organizationId,
+      actorUserId: userId,
+      action: 'INVITATION_ACCEPTED',
+      targetEntity: 'MEMBERSHIP',
+      targetId: membership.id,
+      metadata: {
+        invitationId: invite.id,
+        email: cleanUserEmail,
+        role: invite.role,
+      },
     });
 
     return {
       success: true,
       organizationId: invite.organizationId,
-      organizationName: invite.organizationName,
+      organizationName: invite.organization.name,
       role: invite.role,
       membershipId: membership.id,
     };

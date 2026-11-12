@@ -1,6 +1,8 @@
 // Visnora — Invoice Generation & Document Rendering Service
 // Reference: docs/TECHNICAL_BLUEPRINT.md & M4.9 Invoice and Tax Management
+// Hardened against Audit Findings 10, 11, 13, 14
 
+import crypto from 'crypto';
 import { prisma } from '../../database/src/client';
 import { calculateTax } from './tax-service';
 
@@ -15,23 +17,51 @@ export interface CreateInvoiceParams {
   customerAddress?: string;
   customerGstin?: string;
   customerStateCode?: string;
+  customerCountry?: string;
   taxRatePercent?: number;
 }
 
 /**
- * Generates an immutable, sequential invoice number.
- * Format: VIS-YYYY-NNNNN
+ * Escapes user-supplied content to prevent HTML / XSS injection into invoice documents.
+ */
+export function escapeHtml(str?: string | null): string {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Audit Finding 13: Generates an immutable, sequential and concurrency-safe invoice number.
+ * Format: VIS-YYYY-NNNNN backed by PostgreSQL sequence `invoice_number_seq` for atomic monotonicity.
  */
 export async function generateInvoiceNumber(sequence?: number): Promise<string> {
   const currentYear = new Date().getFullYear();
-  let count = sequence;
-  if (count === undefined) {
-    try {
-      count = (await prisma.invoice.count()) + 1;
-    } catch {
-      count = 1;
-    }
+  if (sequence !== undefined) {
+    return `VIS-${currentYear}-${String(sequence).padStart(5, '0')}`;
   }
+
+  // Database-backed atomic sequence for strict legal consecutive numbering and concurrency safety
+  try {
+    const result: any = await prisma.$queryRawUnsafe("SELECT nextval('public.invoice_number_seq') as next_seq");
+    if (result && result[0]?.next_seq) {
+      const seq = Number(result[0].next_seq);
+      return `VIS-${currentYear}-${String(seq).padStart(5, '0')}`;
+    }
+  } catch {
+    // Sequence unavailable or running in offline mock test environment
+  }
+
+  let count = 1;
+  try {
+    count = (await prisma.invoice.count()) + 1;
+  } catch {
+    count = 1;
+  }
+
   const sequential = String(count).padStart(5, '0');
   return `VIS-${currentYear}-${sequential}`;
 }
@@ -51,11 +81,14 @@ export async function createInvoice(params: CreateInvoiceParams) {
     customerAddress,
     customerGstin,
     customerStateCode,
+    customerCountry = 'IN',
     taxRatePercent = 18.0,
   } = params;
 
+  // Audit Finding 14: Pass customerCountry to support international zero-rated export tax rules
   const tax = calculateTax({
     subtotalPaise,
+    customerCountry,
     customerStateCode,
     taxRatePercent,
   });
@@ -78,7 +111,7 @@ export async function createInvoice(params: CreateInvoiceParams) {
       customerEmail,
       customerAddress,
       customerGstin,
-      taxRatePercent,
+      taxRatePercent: tax.taxRatePercent,
     },
   });
 
@@ -129,21 +162,36 @@ export async function getInvoiceById(organizationId: string, invoiceId: string) 
 }
 
 /**
- * Renders a clean, print-ready HTML template for invoice download/PDF rendering.
+ * Audit Finding 10 & 11: Renders a print-ready HTML template with strict XSS sanitization
+ * and configurable issuer details without fabricated GSTIN numbers.
  */
 export function renderInvoiceHtml(invoice: any, organizationName = 'Visnora Client'): string {
-  const subtotalInr = (invoice.subtotalPaise / 100).toFixed(2);
-  const taxInr = (invoice.taxPaise / 100).toFixed(2);
-  const totalInr = (invoice.totalPaise / 100).toFixed(2);
+  const subtotalInr = (Number(invoice.subtotalPaise) / 100).toFixed(2);
+  const taxInr = (Number(invoice.taxPaise) / 100).toFixed(2);
+  const totalInr = (Number(invoice.totalPaise) / 100).toFixed(2);
   const periodStart = new Date(invoice.billingPeriodStart).toLocaleDateString('en-IN');
   const periodEnd = new Date(invoice.billingPeriodEnd).toLocaleDateString('en-IN');
   const dateIssued = new Date(invoice.createdAt).toLocaleDateString('en-IN');
+
+  // Configurable issuer information (never invented legal identifiers)
+  const issuerName = process.env.INVOICE_ISSUER_NAME || 'Visnora Cloud Technologies';
+  const issuerAddress = process.env.INVOICE_ISSUER_ADDRESS || 'Bangalore, Karnataka, India';
+  const issuerGstin = process.env.INVOICE_ISSUER_GSTIN ? `GSTIN: ${escapeHtml(process.env.INVOICE_ISSUER_GSTIN)}<br>` : '';
+  const issuerEmail = process.env.INVOICE_ISSUER_EMAIL || 'billing@visnora.com';
+
+  // Sanitized customer inputs
+  const safeCustomerName = escapeHtml(invoice.customerName || organizationName);
+  const safeCustomerEmail = invoice.customerEmail ? `${escapeHtml(invoice.customerEmail)}<br>` : '';
+  const safeCustomerAddress = invoice.customerAddress ? `${escapeHtml(invoice.customerAddress)}<br>` : '';
+  const safeCustomerGstin = invoice.customerGstin ? `GSTIN: ${escapeHtml(invoice.customerGstin)}` : '';
+  const safeInvoiceNumber = escapeHtml(invoice.invoiceNumber);
+  const safeStatus = escapeHtml(invoice.status);
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Invoice ${invoice.invoiceNumber} — Visnora</title>
+  <title>Invoice ${safeInvoiceNumber} — Visnora</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #172033; background: #ffffff; padding: 40px; margin: 0; }
     .header { display: flex; justify-content: space-between; border-bottom: 2px solid #E2E8F0; padding-bottom: 24px; margin-bottom: 32px; }
@@ -171,29 +219,29 @@ export function renderInvoiceHtml(invoice: any, organizationName = 'Visnora Clie
     </div>
     <div>
       <h1 class="invoice-title">INVOICE</h1>
-      <div class="invoice-meta">#${invoice.invoiceNumber}</div>
+      <div class="invoice-meta">#${safeInvoiceNumber}</div>
       <div class="invoice-meta">Date: ${dateIssued}</div>
-      <div style="margin-top: 8px;"><span class="badge">${invoice.status}</span></div>
+      <div style="margin-top: 8px;"><span class="badge">${safeStatus}</span></div>
     </div>
   </div>
 
   <div class="parties">
     <div>
       <div class="section-label">Billed By</div>
-      <div class="party-name">Visnora SaaS Technologies</div>
+      <div class="party-name">${escapeHtml(issuerName)}</div>
       <div style="color: #64748B; line-height: 1.5;">
-        Bangalore, Karnataka, India<br>
-        GSTIN: 29AABCV1234F1Z8<br>
-        billing@visnora.com
+        ${escapeHtml(issuerAddress)}<br>
+        ${issuerGstin}
+        ${escapeHtml(issuerEmail)}
       </div>
     </div>
     <div>
       <div class="section-label">Billed To</div>
-      <div class="party-name">${invoice.customerName || organizationName}</div>
+      <div class="party-name">${safeCustomerName}</div>
       <div style="color: #64748B; line-height: 1.5;">
-        ${invoice.customerEmail ? invoice.customerEmail + '<br>' : ''}
-        ${invoice.customerAddress ? invoice.customerAddress + '<br>' : ''}
-        ${invoice.customerGstin ? 'GSTIN: ' + invoice.customerGstin : ''}
+        ${safeCustomerEmail}
+        ${safeCustomerAddress}
+        ${safeCustomerGstin}
       </div>
     </div>
   </div>
@@ -224,7 +272,7 @@ export function renderInvoiceHtml(invoice: any, organizationName = 'Visnora Clie
       <span>₹${subtotalInr}</span>
     </div>
     <div class="totals-row">
-      <span>GST (${invoice.taxRatePercent}%):</span>
+      <span>Tax (${invoice.taxRatePercent}%):</span>
       <span>₹${taxInr}</span>
     </div>
     <div class="totals-row grand-total">
@@ -234,7 +282,7 @@ export function renderInvoiceHtml(invoice: any, organizationName = 'Visnora Clie
   </div>
 
   <div class="footer">
-    Thank you for building AI search visibility with Visnora. For billing support, contact support@visnora.com.
+    Thank you for building AI search visibility with Visnora. For billing inquiries, contact ${escapeHtml(issuerEmail)}.
   </div>
 </body>
 </html>`;

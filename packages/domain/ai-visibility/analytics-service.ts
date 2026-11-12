@@ -112,50 +112,70 @@ export async function getProjectVisibilityOverview(
   const prevSinceDate = new Date(sinceDate);
   prevSinceDate.setDate(prevSinceDate.getDate() - dateRangeDays);
 
-  // 1. Fetch completed prompt runs for current period
-  const runs = await prisma.promptRun.findMany({
-    where: {
-      organizationId,
-      projectId,
-      status: 'COMPLETED',
-      createdAt: { gte: sinceDate },
-    },
-    include: {
-      aiResponse: {
-        include: {
-          mentions: true,
-          citations: true,
+  // 1. Fetch completed prompt runs for current period and status breakdown
+  const [runs, statusAggregations, previousRuns] = await Promise.all([
+    prisma.promptRun.findMany({
+      where: {
+        organizationId,
+        projectId,
+        status: 'COMPLETED',
+        createdAt: { gte: sinceDate },
+      },
+      include: {
+        aiResponse: {
+          include: {
+            mentions: true,
+            citations: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  // Fetch previous period completed runs for trend comparison
-  const previousRuns = await prisma.promptRun.findMany({
-    where: {
-      organizationId,
-      projectId,
-      status: 'COMPLETED',
-      createdAt: { gte: prevSinceDate, lt: sinceDate },
-    },
-    include: {
-      aiResponse: {
-        include: {
-          mentions: true,
-          citations: true,
+      orderBy: { createdAt: 'desc' },
+    }),
+    prisma.promptRun.groupBy({
+      by: ['status'],
+      where: {
+        organizationId,
+        projectId,
+        createdAt: { gte: sinceDate },
+      },
+      _count: { id: true },
+    }),
+    prisma.promptRun.findMany({
+      where: {
+        organizationId,
+        projectId,
+        status: 'COMPLETED',
+        createdAt: { gte: prevSinceDate, lt: sinceDate },
+      },
+      include: {
+        aiResponse: {
+          include: {
+            mentions: true,
+            citations: true,
+          },
         },
       },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+      orderBy: { createdAt: 'desc' },
+    }),
+  ]);
 
+  const statusMap = statusAggregations.reduce((acc, curr) => {
+    acc[curr.status] = curr._count.id;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const totalAttemptedRuns = Object.values(statusMap).reduce((a, b) => a + b, 0);
   const totalCompletedRuns = runs.length;
+  const runsWithAiResponses = runs.filter((r) => r.aiResponse !== null).length;
+  const totalFailedRuns = statusMap['FAILED'] || 0;
 
   if (totalCompletedRuns === 0) {
     return {
       hasData: false,
+      totalAttemptedRuns,
       totalCompletedRuns: 0,
+      runsWithAiResponses: 0,
+      totalFailedRuns,
       totalBrandMentions: 0,
       totalCompetitorMentions: 0,
       totalCitations: 0,
@@ -243,9 +263,12 @@ export async function getProjectVisibilityOverview(
     }
   }
 
-  // 3. Mathematical ratios
-  const mentionRate = calculateObservedMentionRate(runsWithBrand, totalCompletedRuns);
-  const citationRate = Number(((runsWithCitations / totalCompletedRuns) * 100).toFixed(1));
+  // 3. Mathematical ratios based on evaluated responses
+  const evaluatedDenominator = runsWithAiResponses > 0 ? runsWithAiResponses : totalCompletedRuns;
+  const mentionRate = calculateObservedMentionRate(runsWithBrand, evaluatedDenominator);
+  const citationRate = evaluatedDenominator > 0
+    ? Number(((runsWithCitations / evaluatedDenominator) * 100).toFixed(1))
+    : 0;
   const { ssov } = calculateSampleShareOfVoice(totalBrandMentions, totalCompetitorMentions);
   const averagePosition = calculateAveragePosition(positions);
 
@@ -318,7 +341,10 @@ export async function getProjectVisibilityOverview(
 
   return {
     hasData: true,
+    totalAttemptedRuns,
     totalCompletedRuns,
+    runsWithAiResponses,
+    totalFailedRuns,
     totalBrandMentions,
     totalCompetitorMentions,
     totalCitations,
@@ -463,14 +489,18 @@ export async function getCompetitorComparison(
     Array.from(compStats.values()).reduce((acc, c) => acc + c.mentionsCount, 0);
 
   const safeDenominator = Math.max(1, allMentionsCount);
+  const runsWithAiResponses = runs.filter((r) => r.aiResponse !== null).length;
+  const effectiveDenominator = runsWithAiResponses > 0 ? runsWithAiResponses : totalRuns;
 
   return {
     totalRuns,
+    totalCompletedRuns: totalRuns,
+    runsWithAiResponses,
     primaryBrand: {
       name: brand?.canonicalName || 'Primary Brand',
       domain: brand?.domain || '',
       mentionCount: primaryTotalMentions,
-      mentionRate: Number(((primaryRunsCount / totalRuns) * 100).toFixed(1)),
+      mentionRate: Number(((primaryRunsCount / effectiveDenominator) * 100).toFixed(1)),
       shareOfVoice: Number(((primaryTotalMentions / safeDenominator) * 100).toFixed(1)),
       averagePosition: calculateAveragePosition(primaryPositions),
     },
@@ -479,7 +509,7 @@ export async function getCompetitorComparison(
       name: c.name,
       domain: c.domain,
       mentionCount: c.mentionsCount,
-      mentionRate: Number(((c.runsCount / totalRuns) * 100).toFixed(1)),
+      mentionRate: Number(((c.runsCount / effectiveDenominator) * 100).toFixed(1)),
       shareOfVoice: Number(((c.mentionsCount / safeDenominator) * 100).toFixed(1)),
       averagePosition: calculateAveragePosition(c.positions),
     })),

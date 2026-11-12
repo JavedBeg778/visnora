@@ -55,16 +55,16 @@ export async function connectAccount(input: ConnectAccountInput, actorUserId?: s
     throw new AdsAccountLimitError(existingCount, limit);
   }
 
-  // 3. Scrub and Encrypt Credential
-  const cleanKey = scrubAdsApiKey(apiKey);
-  const encrypted = encryptAdsApiKey(cleanKey);
+  // 3. Encrypt the raw API key securely; mask it for display and audit logs
+  const rawKey = apiKey.trim();
+  const encrypted = encryptAdsApiKey(rawKey);
 
-  // 4. Verify Account with OpenAI Ads Client
+  // 4. Verify Account with OpenAI Ads Client using valid API key
   let isVerified = false;
   let clientError: string | null = null;
 
   try {
-    const client = new OpenAiAdsClient({ apiKey: cleanKey });
+    const client = new OpenAiAdsClient({ apiKey: rawKey });
     const verifyResult = await client.verifyAccount();
     isVerified = !!verifyResult?.id;
   } catch (err: any) {

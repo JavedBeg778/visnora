@@ -2,7 +2,7 @@
 // Provides safe, SSRF-protected manual ad URL ingestion and metadata extraction
 
 import crypto from 'crypto';
-import { validateSafeUrl } from '../../../shared/validation/url-validator';
+import { validateSafeUrl, resolveAndValidateHost } from '../../../shared/validation/url-validator';
 import {
   AdSourceType,
   AdSourceCapabilities,
@@ -73,6 +73,12 @@ export class ManualUrlSourceAdapter implements AdSourceAdapter {
     const targetUrl = safetyCheck.normalizedUrl;
     const domain = safetyCheck.domain || new URL(targetUrl).hostname;
 
+    // Audit Finding 1 & 2: DNS Rebinding Protection — verify resolved IP addresses before request
+    const isInitialDnsSafe = await resolveAndValidateHost(new URL(targetUrl).hostname);
+    if (!isInitialDnsSafe) {
+      throw new Error(`DNS resolution for "${new URL(targetUrl).hostname}" resolved to restricted IP address (SSRF blocked).`);
+    }
+
     let html = '';
     let statusCode = 200;
 
@@ -80,16 +86,51 @@ export class ManualUrlSourceAdapter implements AdSourceAdapter {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
 
-      const response = await fetch(targetUrl, {
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (Visnora Ad Intelligence Bot)',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        signal: controller.signal,
-      });
+      let currentUrl = targetUrl;
+      let redirectCount = 0;
+      const maxRedirects = 3;
+      let response: Response | null = null;
+
+      while (redirectCount <= maxRedirects) {
+        // Audit Finding 3: Revalidate every redirect destination
+        const currentHost = new URL(currentUrl).hostname;
+        const isRedirectDnsSafe = await resolveAndValidateHost(currentHost);
+        if (!isRedirectDnsSafe) {
+          throw new Error(`Redirect target "${currentHost}" resolved to restricted IP address (SSRF blocked).`);
+        }
+
+        response = await fetch(currentUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 (Visnora Ad Intelligence Bot)',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          },
+          signal: controller.signal,
+          redirect: 'manual',
+        });
+
+        // Handle redirect
+        if ([301, 302, 303, 307, 308].includes(response.status)) {
+          const location = response.headers.get('location');
+          if (!location) break;
+          const resolvedLocation = new URL(location, currentUrl).toString();
+          const locCheck = validateSafeUrl(resolvedLocation);
+          if (!locCheck.safe || !locCheck.normalizedUrl) {
+            throw new Error(`Unsafe redirect destination: ${locCheck.reason}`);
+          }
+          currentUrl = locCheck.normalizedUrl;
+          redirectCount++;
+          continue;
+        }
+
+        break;
+      }
 
       clearTimeout(timeoutId);
+      if (!response) {
+        throw new Error('Failed to obtain HTTP response');
+      }
+
       statusCode = response.status;
 
       const contentType = response.headers.get('content-type') || '';
@@ -118,6 +159,9 @@ export class ManualUrlSourceAdapter implements AdSourceAdapter {
         html = fullBuffer.toString('utf-8');
       }
     } catch (fetchErr: any) {
+      if (fetchErr.message?.includes('SSRF') || fetchErr.message?.includes('restricted IP')) {
+        throw fetchErr;
+      }
       // In case of network errors or timeouts in unit tests, construct a safe fallback record
       html = '';
     }
@@ -183,6 +227,8 @@ export class ManualUrlSourceAdapter implements AdSourceAdapter {
         isAccessible: statusCode >= 200 && statusCode < 400,
         extractedOffers: this.extractOffers(headline + ' ' + primaryText),
       },
+      isSampleData: false,
+      provenance: 'MANUAL_URL',
       rawMetadata: {
         domain,
         extractedAt: new Date().toISOString(),

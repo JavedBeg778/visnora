@@ -260,7 +260,7 @@ export function calculateRealisticPlanEconomics(
 }
 
 // CLI Execution entrypoint
-if (require.main === module || process.argv[1]?.includes('cost-calculator')) {
+if (process.argv[1]?.includes('cost-calculator')) {
   console.log(`\n========================================================================================`);
   console.log(`VISNORA AUDITED INFERENCE & SUBSCRIPTION UNIT ECONOMICS (GEMINI 3.8 FLASH)`);
   console.log(`Exchange Rate: 1 USD = ₹${USD_TO_INR_EXCHANGE_RATE.toFixed(2)} | Timestamp: ${EXCHANGE_RATE_TIMESTAMP}`);

@@ -17,12 +17,13 @@ export interface StoredCredentialFields {
  */
 export function getAdsMasterKey(): string {
   const key =
+    process.env.ENCRYPTION_KEY ||
     process.env.OPENAI_ADS_ENCRYPTION_KEY ||
     process.env.APP_ENCRYPTION_KEY;
 
   if (!key) {
     throw new Error(
-      'Missing encryption secret: OPENAI_ADS_ENCRYPTION_KEY or APP_ENCRYPTION_KEY must be configured in environment variables.'
+      'Missing encryption secret: ENCRYPTION_KEY, OPENAI_ADS_ENCRYPTION_KEY or APP_ENCRYPTION_KEY must be configured in environment variables.'
     );
   }
 

@@ -323,7 +323,7 @@ export async function runBenchmark(options: BenchmarkRunOptions = {}): Promise<B
 }
 
 // CLI Execution entrypoint
-if (require.main === module || process.argv[1]?.includes('benchmark-runner')) {
+if (process.argv[1]?.includes('benchmark-runner')) {
   const cliArgs = parseCliArgs(process.argv.slice(2));
 
   runBenchmark(cliArgs).catch((err) => {

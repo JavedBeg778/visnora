@@ -9,7 +9,7 @@ services:
     runtime: node
     plan: starter
     region: singapore
-    buildCommand: npm install && npx prisma generate --schema=packages/database/prisma/schema.prisma
+    buildCommand: npm install && npx prisma generate --schema=packages/database/prisma/schema.prisma && npm run build:worker
     startCommand: npm run worker
     autoDeploy: false
     envVars:

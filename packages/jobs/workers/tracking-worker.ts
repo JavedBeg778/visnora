@@ -389,7 +389,7 @@ process.on('SIGTERM', () => handleProcessShutdown('SIGTERM'));
 process.on('SIGINT', () => handleProcessShutdown('SIGINT'));
 
 // Auto-run if executed directly as entrypoint
-if (typeof require !== 'undefined' && require.main === module) {
+if (typeof require !== 'undefined' && require.main === module && process.argv[1]?.includes('tracking-worker')) {
   startTrackingWorker();
 }
 

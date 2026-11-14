@@ -12,7 +12,7 @@ export {
 import { startTrackingWorker } from './tracking-worker';
 
 // Auto-run if executed directly as entrypoint
-if (typeof require !== 'undefined' && require.main === module) {
+if (typeof require !== 'undefined' && require.main === module && process.argv[1]?.includes('prompt-runner')) {
   startTrackingWorker();
 }
 

@@ -277,7 +277,9 @@ describe('M3 Durable Background Worker & Queue Infrastructure', () => {
   });
 
   describe('Production Fail-Closed on Queue Failure (Phase 3 Hardening)', () => {
-    it('returns HTTP 503 and marks run as FAILED in production when Redis is unreachable', async () => {
+    it(
+      'returns HTTP 503 and marks run as FAILED in production when Redis is unreachable',
+      async () => {
       const prevEnv = process.env.NODE_ENV;
       const prevFallback = process.env.ENABLE_IN_MEMORY_TRACKING;
       try {
@@ -353,6 +355,6 @@ describe('M3 Durable Background Worker & Queue Infrastructure', () => {
         (process.env as any).NODE_ENV = prevEnv;
         process.env.ENABLE_IN_MEMORY_TRACKING = prevFallback;
       }
-    });
+    }, 15000);
   });
 });

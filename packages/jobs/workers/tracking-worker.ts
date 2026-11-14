@@ -46,9 +46,23 @@ export async function processTrackingJob(job: Job<TrackingJobData>): Promise<any
   console.log(`[TrackingWorker] Processing job ${job.id} for tracking run ${trackingRunId}`);
 
   // 1. Fetch tracking run from PostgreSQL
-  const trackingRun = await prisma.trackingRun.findUnique({
-    where: { id: trackingRunId },
-  });
+  let trackingRun;
+  try {
+    trackingRun = await prisma.trackingRun.findUnique({
+      where: { id: trackingRunId },
+    });
+  } catch (dbErr: any) {
+    // If PostgreSQL rejects an invalid UUID format (e.g. malformed test payload in queue)
+    if (
+      dbErr?.code === 'P2023' ||
+      dbErr?.message?.includes('invalid character') ||
+      dbErr?.message?.includes('invalid input syntax for type uuid')
+    ) {
+      console.warn(`[TrackingWorker] Skipping job ${job.id}: Invalid UUID trackingRunId "${trackingRunId}"`);
+      return { skipped: true, reason: 'INVALID_TRACKING_RUN_ID' };
+    }
+    throw dbErr;
+  }
 
   if (!trackingRun) {
     throw new Error(`Tracking run ${trackingRunId} not found in database`);

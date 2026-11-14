@@ -2,7 +2,7 @@
 
 **Endpoint:** `/api/v1/tracking/cron`  
 **Orchestrator:** Vercel Cron  
-**Schedule:** `0 * * * *` (Hourly)  
+**Schedule:** `30 18 * * *` (Daily at 18:30 UTC / 00:00 IST)  
 **Security:** Bearer Token Authentication (`CRON_SECRET`)  
 **Status:** Implemented & Locally Verified (Production Deployment Ready)
 
@@ -32,22 +32,22 @@ Vercel automatically triggers the endpoint using the schedule defined in [`verce
   "crons": [
     {
       "path": "/api/v1/tracking/cron",
-      "schedule": "0 * * * *"
+      "schedule": "30 18 * * *"
     }
   ]
 }
 ```
 
-- **Cadence**: Runs at the start of every hour (`0 * * * *`).
+- **Cadence**: Runs once daily at 18:30 UTC (00:00 India Standard Time) using `30 18 * * *`, compatible with Vercel Hobby.
 - **HTTP Method**: Vercel invokes cron endpoints using `GET`. (Visnora supports both `GET` and `POST`).
 
 ### Vercel Plan-Specific Scheduling Restrictions
 - **Vercel Pro / Enterprise (Recommended for Visnora Production)**:
   - Supports execution as frequent as **every minute** (`* * * * *`).
   - Supports up to 40 cron jobs per project.
-  - The configured hourly cadence (`0 * * * *`) operates natively.
+  - The configured daily cadence (`30 18 * * *`) operates natively.
 - **Vercel Hobby (Personal / Free Accounts)**:
-  - Restricted to at most **once per day** (e.g. `0 0 * * *`) and at most 1 cron job per project.
+  - Restricted to at most **once per day** (e.g. `30 18 * * *`) and at most 1 cron job per project.
   - Deploying a schedule more frequent than daily on a Hobby account will trigger deployment errors or fail to register. If deploying on Hobby, adjust `vercel.json` to `"schedule": "0 0 * * *"`.
 
 ---

@@ -8,7 +8,7 @@ services:
     name: visnora-background-worker
     runtime: node
     plan: starter
-    region: oregon
+    region: singapore
     buildCommand: npm install && npx prisma generate --schema=packages/database/prisma/schema.prisma
     startCommand: npm run worker
     autoDeploy: false

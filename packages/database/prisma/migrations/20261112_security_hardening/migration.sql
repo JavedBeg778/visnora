@@ -47,16 +47,16 @@ CREATE POLICY "Admins can manage competitors in their organization"
     ON public.competitors FOR ALL
     USING (public.is_org_admin(organization_id));
 
--- 3.3 prompts
-ALTER TABLE IF EXISTS public.prompts ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Members can view prompts in their organization" ON public.prompts;
-CREATE POLICY "Members can view prompts in their organization"
-    ON public.prompts FOR SELECT
+-- 3.3 tracked_prompts (Prisma model TrackedPrompt maps to tracked_prompts)
+ALTER TABLE IF EXISTS public.tracked_prompts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Members can view tracked_prompts in their organization" ON public.tracked_prompts;
+CREATE POLICY "Members can view tracked_prompts in their organization"
+    ON public.tracked_prompts FOR SELECT
     USING (public.is_org_member(organization_id));
 
-DROP POLICY IF EXISTS "Admins can manage prompts in their organization" ON public.prompts;
-CREATE POLICY "Admins can manage prompts in their organization"
-    ON public.prompts FOR ALL
+DROP POLICY IF EXISTS "Admins can manage tracked_prompts in their organization" ON public.tracked_prompts;
+CREATE POLICY "Admins can manage tracked_prompts in their organization"
+    ON public.tracked_prompts FOR ALL
     USING (public.is_org_admin(organization_id));
 
 -- 3.4 tracking_runs
@@ -147,4 +147,3 @@ CREATE TRIGGER trg_immutable_audit_logs
 
 -- 5. Concurrency-Safe Invoice Number Sequence
 CREATE SEQUENCE IF NOT EXISTS public.invoice_number_seq START WITH 1 INCREMENT BY 1;
-

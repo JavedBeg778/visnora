@@ -15,6 +15,7 @@ const nextConfig = {
       './node_modules/.prisma/client/**/*',
     ],
   },
+  serverExternalPackages: ['bullmq', 'ioredis'],
   experimental: {
     serverActions: {
       bodySizeLimit: '2mb',
@@ -35,7 +36,10 @@ const nextConfig = {
       },
     ];
   },
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = [...(config.externals || []), '@valkey/valkey-glide'];
+    }
     config.resolve.alias = {
       ...config.resolve.alias,
       '@/app': path.resolve(__dirname, 'app'),
